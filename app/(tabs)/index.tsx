@@ -1,17 +1,17 @@
-import {StyleSheet, View} from 'react-native';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
 import BookShelf from "@/components/book-shelf";
-import {Search} from "lucide-react-native";
+import ParallaxScrollView from '@/components/parallax-scroll-view';
+import { Search } from "lucide-react-native";
+import { StyleSheet, Text, View } from 'react-native';
 
 export default function HomeScreen() {
     return (
         <ParallaxScrollView
-            headerBackgroundColor={{light: '#FFF', dark: '#1D3D47'}}
+            headerBackgroundColor={{ light: '#FFF', dark: '#1D3D47' }}
             headerElement={
                 <View style={styles.headerContainer}>
                     <View style={styles.header}>
-                        <p>首页</p>
-                        <p>本地</p>
+                        <Text>首页</Text>
+                        <Text>本地</Text>
                     </View>
                     <Search
                         size={26}
@@ -20,7 +20,7 @@ export default function HomeScreen() {
                 </View>
             }
         >
-            <BookShelf/>
+            <BookShelf />
         </ParallaxScrollView>
     );
 }

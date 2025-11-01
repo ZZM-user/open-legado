@@ -1,74 +1,87 @@
-import {FlatList, Image, StyleSheet, Text, View} from 'react-native';
+import { Book, useBookshelf } from '@/hooks/use-bookshelf';
+import { forwardRef, useImperativeHandle } from 'react';
+import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// 定义书籍数据类型
-type Book = {
-    id: string;
-    title: string;
-    author: string;
-    coverUrl: string;
-    lastReadChapter?: string;
-    progress?: number;
+export type BookShelfHandle = {
+    addBook: (book: Book) => void;
+    removeBook: (bookId: string) => void;
+    upsertBook: (book: Book) => void;
+    clearBooks: () => void;
+    replaceBooks: (books: Book[]) => void;
+    hasBook: (bookId: string) => boolean;
+    getBooks: () => Book[];
 };
 
-// 模拟书籍数据
-const booksData: Book[] = [
-    {
-        id: '1',
-        title: '斗破苍穹',
-        author: '天蚕土豆',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第125章',
-        progress: 65,
-    },
-    {
-        id: '2',
-        title: '仙逆',
-        author: '耳根',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第312章',
-        progress: 40,
-    },
-    {
-        id: '3',
-        title: '凡人修仙传',
-        author: '忘语',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第208章',
-        progress: 80,
-    },
-];
+export type BookShelfProps = {
+    initialBooks?: Book[];
+    onBookPress?: (book: Book) => void;
+};
 
-export default function BookShelf() {
-    // 渲染单个书籍项
-    const renderBookItem = ({item}: { item: Book }) => (
-        <View style={styles.bookItem}>
-            <Image source={{uri: item.coverUrl}} style={styles.bookCover}/>
-            <View style={styles.bookInfo}>
-                <Text style={styles.bookTitle}>{item.title}</Text>
-                <Text style={styles.bookAuthor}>{item.author}</Text>
-                {item.lastReadChapter && (
-                    <Text style={styles.lastRead}>上次读到: {item.lastReadChapter}</Text>
-                )}
+const BookShelf = forwardRef<BookShelfHandle, BookShelfProps>(function BookShelf(
+    { initialBooks, onBookPress },
+    ref,
+) {
+    const { books, addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook } = useBookshelf({ initialBooks });
+
+    useImperativeHandle(
+        ref,
+        () => ({
+            addBook,
+            upsertBook,
+            removeBook,
+            clearBooks,
+            replaceBooks,
+            hasBook,
+            getBooks: () => books,
+        }),
+        [addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook, books],
+    );
+
+    const renderBookItem = ({ item }: { item: Book }) => (
+        <TouchableOpacity onPress={() => onBookPress?.(item)} activeOpacity={0.7}>
+            <View style={styles.bookItem}>
+                <Image source={{ uri: item.coverUrl }} style={styles.bookCover} />
+                <View style={styles.bookInfo}>
+                    <Text style={styles.bookTitle}>{item.title}</Text>
+                    <Text style={styles.bookAuthor}>{item.author}</Text>
+                    {item.lastReadChapter && (
+                        <Text style={styles.lastRead}>上次读到: {item.lastReadChapter}</Text>
+                    )}
+                </View>
             </View>
-        </View>
+        </TouchableOpacity>
     );
 
     return (
         <FlatList
-            data={booksData}
+            data={books}
             renderItem={renderBookItem}
             keyExtractor={(item) => item.id}
             style={styles.bookList}
-            contentContainerStyle={styles.listContent}
+            contentContainerStyle={books.length === 0 ? styles.emptyContent : styles.listContent}
+            ListEmptyComponent={
+                <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyTitle}>书架空空如也</Text>
+                    <Text style={styles.emptyDescription}>添加一本书即可在此处查看阅读进度</Text>
+                </View>
+            }
         />
     );
-}
+});
+
+export default BookShelf;
 
 const styles = StyleSheet.create({
     bookList: {
         flex: 1,
     },
     listContent: {},
+    emptyContent: {
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 80,
+    },
     bookItem: {
         flexDirection: 'row',
         marginBottom: 12,
@@ -100,6 +113,19 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#aaa',
         marginBottom: 6,
+    },
+    emptyContainer: {
+        alignItems: 'center',
+        gap: 8,
+    },
+    emptyTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#666',
+    },
+    emptyDescription: {
+        fontSize: 14,
+        color: '#999',
     },
     progressContainer: {
         height: 4,
