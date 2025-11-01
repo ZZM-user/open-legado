@@ -1,64 +1,79 @@
 import ParallaxScrollView from '@/components/parallax-scroll-view';
-import {RuleGroupKey, RuleType, useBookSourceManager} from '@/hooks/use-book-source-manager';
+import {
+    BookSource,
+    BookSourceRule,
+    RULE_GROUP_META,
+    RULE_TYPE_OPTIONS,
+    RuleGroupKey,
+    RuleType,
+    useBookSource
+} from '@/hooks/use-book-source';
 import {useLocalSearchParams, useRouter} from 'expo-router';
-import {useMemo, useState} from 'react';
-import {ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View,} from 'react-native';
+import {useState} from 'react';
+import {ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,} from 'react-native';
+import {Save} from "lucide-react-native";
 
 export default function BookSourceDetailScreen() {
     const router = useRouter();
     const params = useLocalSearchParams<{ id?: string }>();
-    const sourceId = useMemo(() => {
-        const raw = params.id;
-        if (Array.isArray(raw)) {
-            return raw[0];
+    const bookSourceManager = useBookSource();
+
+    const [editingSource, setEditingSource] = useState<BookSource>(() => {
+        const idNumber = params.id ? Number(params.id) : undefined;
+        const existingSource = bookSourceManager.getSourceById(idNumber);
+        if (existingSource) {
+            return {...existingSource};
+        } else {
+            return bookSourceManager.createDefaultSource();
         }
-        return raw ?? '';
-    }, [params.id]);
-
-    const {
-        getSourceById,
-        updateSourceMeta,
-        addRuleToGroup,
-        updateRule,
-        resetRules,
-        ruleGroupMeta,
-        ruleTypeOptions,
-    } = useBookSourceManager();
-
-    const editingSource = getSourceById(sourceId) ?? null;
-
+    });
     const [activeGroup, setActiveGroup] = useState<RuleGroupKey>('basic');
+    const [currentGroupMeta, setCurrentGroupMeta] = useState(() => {
+        return RULE_GROUP_META[activeGroup];
+    });
 
-    const currentGroupMeta = useMemo(
-        () => ruleGroupMeta.find((group) => group.key === activeGroup),
-        [ruleGroupMeta, activeGroup],
-    );
+    // 更新源信息
+    const updateSourceMeta = (meta: Partial<BookSource>) => {
+        setEditingSource((prev) => ({...prev, ...meta}));
+    };
 
-    if (!editingSource) {
-        return (
-            <ParallaxScrollView
-                showBackButton
-                headerBackgroundColor={{light: '#FFF', dark: '#1D3D47'}}
-                headerElement={<View/>}
-            >
-                <View style={styles.missingContainer}>
-                    <Text style={styles.missingTitle}>未找到对应的书源</Text>
-                    <Text style={styles.missingDescription}>请返回列表重新选择或新建书源。</Text>
-                    <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-                        <Text style={styles.backButtonText}>返回列表</Text>
-                    </TouchableOpacity>
-                </View>
-            </ParallaxScrollView>
-        );
-    }
+    // 更新规则
+    const updateRule = (group: RuleGroupKey, ruleId: string, patch: Partial<BookSourceRule>) => {
+        setEditingSource((prev) => {
+            const updatedGroup = prev.ruleGroups[group]?.map((rule) =>
+                rule.id === ruleId ? {...rule, ...patch} : rule
+            ) ?? [];
+
+            return {
+                ...prev,
+                ruleGroups: {
+                    ...prev.ruleGroups,
+                    [group]: updatedGroup,
+                },
+            };
+        });
+    };
+
+    // 保存源信息
+    const updateBookSource = () => {
+        if (editingSource.id) {
+            bookSourceManager.updateSource(editingSource).then(() => {
+                router.back();
+            });
+        } else {
+            bookSourceManager.addSource(editingSource).then(() => {
+                router.back();
+            });
+        }
+    };
 
     return (
         <ParallaxScrollView
             showBackButton
-            headerBackgroundColor={{light: '#FFF', dark: '#1D3D47'}}
             headerElement={
                 <View style={styles.headerContainer}>
-                    <Text style={styles.headerTitle}>配置：{editingSource.name}</Text>
+                    <Text style={styles.headerTitle}>{editingSource.name}</Text>
+                    <Save size={24} style={{marginTop: 6}} onPress={() => updateBookSource()}/>
                 </View>
             }
         >
@@ -73,7 +88,7 @@ export default function BookSourceDetailScreen() {
                                 placeholder="例如：某小说网"
                                 value={editingSource.name}
                                 onChangeText={(text) =>
-                                    updateSourceMeta(editingSource.id, {name: text})
+                                    updateSourceMeta({name: text})
                                 }
                             />
                         </View>
@@ -85,29 +100,15 @@ export default function BookSourceDetailScreen() {
                                     placeholder="https://example.com"
                                     value={editingSource.baseUrl}
                                     onChangeText={(text) =>
-                                        updateSourceMeta(editingSource.id, {baseUrl: text})
+                                        updateSourceMeta({baseUrl: text})
                                     }
                                 />
-                            </View>
-                            <View style={styles.fieldHalfToggle}>
-                                <Text style={styles.label}>启用状态</Text>
-                                <View style={styles.toggleRow}>
-                                    <Switch
-                                        value={editingSource.enabled}
-                                        onValueChange={(value) =>
-                                            updateSourceMeta(editingSource.id, {enabled: value})
-                                        }
-                                    />
-                                    <Text style={styles.toggleText}>
-                                        {editingSource.enabled ? '已启用' : '已停用'}
-                                    </Text>
-                                </View>
                             </View>
                         </View>
                         <View style={styles.fieldBlock}>
                             <Text style={styles.label}>规则类型</Text>
                             <View style={styles.ruleTypeOptionsRow}>
-                                {ruleTypeOptions.map((option) => {
+                                {RULE_TYPE_OPTIONS.map((option) => {
                                     const isActive = option.value === editingSource.ruleType;
                                     return (
                                         <TouchableOpacity
@@ -117,7 +118,7 @@ export default function BookSourceDetailScreen() {
                                                 isActive && styles.typeBadgeActive,
                                             ]}
                                             onPress={() =>
-                                                updateSourceMeta(editingSource.id, {
+                                                updateSourceMeta({
                                                     ruleType: option.value as RuleType,
                                                 })
                                             }
@@ -135,16 +136,13 @@ export default function BookSourceDetailScreen() {
                                 })}
                             </View>
                         </View>
-                        {!!editingSource.description && (
-                            <Text style={styles.hintText}>{editingSource.description}</Text>
-                        )}
                     </View>
                 </View>
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>规则配置</Text>
                     <View style={styles.groupTabs}>
-                        {ruleGroupMeta.map((group) => (
+                        {RULE_GROUP_META.map((group) => (
                             <TouchableOpacity
                                 key={group.key}
                                 style={[
@@ -185,7 +183,7 @@ export default function BookSourceDetailScreen() {
                                     multiline
                                     value={rule.value}
                                     onChangeText={(text) =>
-                                        updateRule(editingSource.id, activeGroup, rule.id, {
+                                        updateRule(activeGroup, rule.id, {
                                             value: text,
                                         })
                                     }
@@ -239,11 +237,6 @@ const styles = StyleSheet.create({
     fieldHalf: {
         flex: 1,
         gap: 8,
-    },
-    fieldHalfToggle: {
-        flex: 1,
-        gap: 8,
-        alignItems: 'flex-start',
     },
     toggleRow: {
         flexDirection: 'row',

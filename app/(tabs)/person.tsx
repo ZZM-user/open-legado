@@ -1,5 +1,5 @@
 import ParallaxScrollView from "@/components/parallax-scroll-view";
-import {StyleSheet, View} from 'react-native';
+import {StyleSheet, Text, View} from 'react-native';
 import {SettingsList} from "@/components/settings-list";
 import {useRouter} from "expo-router";
 import {BadgeQuestionMark, BellDot, BookText, Palette} from "lucide-react-native";
@@ -18,7 +18,7 @@ export default function PersonScreen() {
                     icon: <BookText/>,
                     title: '书源',
                     description: '管理书源',
-                    onPress: () => router.push('/manager/book-source')
+                    onPress: () => router.push('/book-source')
                 },
                 {
                     id: 'notifications',
@@ -51,7 +51,7 @@ export default function PersonScreen() {
             headerBackgroundColor={{light: '#FFF', dark: '#1D3D47'}}
             headerElement={
                 <View style={styles.headerContainer}>
-                    <p>我的</p>
+                    <Text>我的</Text>
                     <BadgeQuestionMark size={23}
                                        color="#808080"
                     />

@@ -1,20 +1,20 @@
 import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { useBookSourceManager } from '@/hooks/use-book-source-manager';
-import { useRouter } from 'expo-router';
-import { Plus, Trash2 } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import {useBookSource} from '@/hooks/use-book-source';
+import {useRouter} from 'expo-router';
+import {Plus, Trash2} from 'lucide-react-native';
+import {Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
 
 export default function BookSourceListScreen() {
     const router = useRouter();
-    const { sources, addSource, updateSourceMeta, removeSource } = useBookSourceManager();
+    const {getAllSources, addSource, removeSource} = useBookSource();
+    const sources = getAllSources() || [];
 
     const handleAddSource = () => {
-        const created = addSource({ name: `新建书源 ${sources.length + 1}` });
-        router.push(`/manager/book-source/${created.id}`);
+        router.push(`/book-source/${undefined}`);
     };
 
     const handleEditSource = (sourceId: string) => {
-        router.push(`/manager/book-source/${sourceId}`);
+        router.push(`/book-source/${sourceId}`);
     };
 
     return (
@@ -25,7 +25,7 @@ export default function BookSourceListScreen() {
                     <View style={styles.headerContainer}>
                         <Text style={styles.headerTitle}>书源管理</Text>
                         <TouchableOpacity style={styles.primaryButton} onPress={handleAddSource}>
-                            <Plus size={18} color="#fff" />
+                            <Plus size={18} color="#fff"/>
                             <Text style={styles.primaryButtonText}>新增书源</Text>
                         </TouchableOpacity>
                     </View>
@@ -37,7 +37,7 @@ export default function BookSourceListScreen() {
                             {sources.map((source) => (
                                 <Pressable
                                     key={source.id}
-                                    style={({ pressed }) => [
+                                    style={({pressed}) => [
                                         styles.sourceRow,
                                         pressed && styles.sourceRowPressed,
                                     ]}
@@ -53,13 +53,13 @@ export default function BookSourceListScreen() {
                                         <View style={styles.toggleRow}>
                                             <Switch
                                                 value={source.enabled}
-                                                onValueChange={(value) =>
-                                                    updateSourceMeta(source.id, { enabled: value })
-                                                }
+                                                // onValueChange={(value) =>
+                                                // updateSourceMeta(source.id, {enabled: value})
+                                                //})
                                             />
                                         </View>
                                         <Pressable
-                                            style={({ pressed }) => [
+                                            style={({pressed}) => [
                                                 styles.deleteButton,
                                                 pressed && styles.deleteButtonPressed,
                                             ]}
@@ -68,7 +68,7 @@ export default function BookSourceListScreen() {
                                                 removeSource(source.id);
                                             }}
                                         >
-                                            <Trash2 size={16} color="#F04438" />
+                                            <Trash2 size={16} color="#F04438"/>
                                         </Pressable>
                                     </View>
                                 </Pressable>
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
         shadowColor: '#000',
         shadowOpacity: 0.05,
         shadowRadius: 4,
-        shadowOffset: { width: 0, height: 1 },
+        shadowOffset: {width: 0, height: 1},
         elevation: 1,
     },
     sourceRowPressed: {
