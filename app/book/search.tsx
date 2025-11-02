@@ -277,7 +277,7 @@ export default function SearchScreen() {
         router.push({
             pathname: '/book/book-detail',
             params: {
-                bookId: result.id,
+                id: result.id,
                 title: result.title,
                 author: result.author,
                 coverUrl: result.coverUrl,

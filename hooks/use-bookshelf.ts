@@ -21,16 +21,17 @@ export type UseBookshelfOptions = {
 
 export type BookshelfActions = {
     addBook: (book: Book) => Promise<void>;
-    removeBook: (bookId: string) => Promise<void>;
+    removeBook: (bookId: number) => Promise<void>;
     clearBooks: () => Promise<void>;
     replaceBooks: (books: Book[]) => Promise<void>;
     upsertBook: (book: Book) => Promise<void>;
+    getBookById: (bookId: number) => Book | null;
 };
 
 export type UseBookshelfResult = {
     books: Book[];
     totalBooks: number;
-    hasBook: (bookId: string) => boolean;
+    hasBook: (bookId: number) => boolean;
 } & BookshelfActions;
 
 export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfResult {
@@ -67,7 +68,7 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         await upsertBook(book);
     }, [upsertBook]);
 
-    const removeBook = useCallback(async (bookId: string) => {
+    const removeBook = useCallback(async (bookId: number) => {
         await db.delete(booksTable).where(eq(booksTable.id, bookId));
         const dbBooks = await db.select().from(booksTable);
         setBooks(dbBooks);
@@ -86,6 +87,10 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         setBooks(nextBooks);
     }, []);
 
+    const getBookById = (bookId: number) => {
+        return db.select().from(booksTable).where(eq(booksTable.id, bookId)).get();
+    };
+
     return {
         books,
         totalBooks,
@@ -95,5 +100,6 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         clearBooks,
         replaceBooks,
         upsertBook,
+        getBookById
     };
 }
