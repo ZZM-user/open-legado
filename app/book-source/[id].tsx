@@ -57,7 +57,7 @@ export default function BookSourceDetailScreen() {
     // 保存源信息
     const updateBookSource = () => {
         if (editingSource.id) {
-            bookSourceManager.updateSource(editingSource).then(() => {
+            bookSourceManager.updateSource(editingSource.id, editingSource).then(() => {
                 router.back();
             });
         } else {

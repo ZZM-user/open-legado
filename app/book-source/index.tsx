@@ -1,21 +1,31 @@
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import {useBookSource} from '@/hooks/use-book-source';
-import {useRouter} from 'expo-router';
+import {useFocusEffect, useRouter} from 'expo-router';
 import {Plus, Trash2} from 'lucide-react-native';
 import {Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
+import {useCallback, useState} from "react";
 
 export default function BookSourceListScreen() {
     const router = useRouter();
-    const {getAllSources, addSource, removeSource} = useBookSource();
-    const sources = getAllSources() || [];
+    const {getAllSources, updateSource, removeSource, toggleSourceEnabled} = useBookSource();
+    const [sources, setSources] = useState(getAllSources() || []);
+
+    useFocusEffect(
+        useCallback(() => {
+            const latestSources = getAllSources() || [];
+            setSources(latestSources);
+            console.log('sources', latestSources);
+        }, [])
+    );
 
     const handleAddSource = () => {
         router.push(`/book-source/${undefined}`);
     };
 
-    const handleEditSource = (sourceId: string) => {
+    const handleEditSource = (sourceId: number) => {
         router.push(`/book-source/${sourceId}`);
     };
+
 
     return (
         <>
@@ -53,9 +63,13 @@ export default function BookSourceListScreen() {
                                         <View style={styles.toggleRow}>
                                             <Switch
                                                 value={source.enabled}
-                                                // onValueChange={(value) =>
-                                                // updateSourceMeta(source.id, {enabled: value})
-                                                //})
+                                                onValueChange={async (value) => {
+                                                    await toggleSourceEnabled(source.id, value)
+                                                    setSources(prev => prev.map(src => src.id === source.id ? {
+                                                        ...src,
+                                                        enabled: value
+                                                    } : src));
+                                                }}
                                             />
                                         </View>
                                         <Pressable
@@ -63,9 +77,10 @@ export default function BookSourceListScreen() {
                                                 styles.deleteButton,
                                                 pressed && styles.deleteButtonPressed,
                                             ]}
-                                            onPress={(event) => {
+                                            onPress={async (event) => {
                                                 event.stopPropagation();
-                                                removeSource(source.id);
+                                                await removeSource(source.id);
+                                                setSources(prev => prev.filter(src => src.id !== source.id)); // 同步更新 UI
                                             }}
                                         >
                                             <Trash2 size={16} color="#F04438"/>

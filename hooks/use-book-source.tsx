@@ -65,15 +65,13 @@ export const RULE_GROUP_META: RuleGroupMeta[] = [
 
 const RULE_TEMPLATES: Record<RuleGroupKey, RuleTemplate[]> = {
     basic: [
-        {key: 'baseUrl', label: '站点根地址', placeholder: 'https://example.com'},
         {key: 'charset', label: '页面编码', placeholder: 'utf-8'},
         {
             key: 'headers',
             label: '自定义请求头',
             placeholder: 'User-Agent: ...',
-            description: '以 JSON 或 YAML 格式书写'
+            description: '以 JSON 格式书写'
         },
-        {key: 'ruleType', label: '规则类型', placeholder: 'css / xpath / jsonpath / regex'},
     ],
     search: [
         {key: 'searchUrl', label: '搜索地址', placeholder: 'https://example.com/search?q={{key}}'},
@@ -87,7 +85,7 @@ const RULE_TEMPLATES: Record<RuleGroupKey, RuleTemplate[]> = {
         {key: 'nextPage', label: '翻页规则', placeholder: 'a.next'},
     ],
     discover: [
-        {key: 'channels', label: '发现频道配置', placeholder: '[{"title":"玄幻","url":"/xuanhuan"}]'},
+        {key: 'channels', label: '发现配置规则', placeholder: '[{"title":"玄幻","url":"/xuanhuan"}]'},
         {key: 'itemSelector', label: '列表项规则', placeholder: '.book-item'},
         {key: 'titleSelector', label: '书名规则', placeholder: '.book-title'},
         {key: 'authorSelector', label: '作者规则', placeholder: '.author'},
@@ -172,19 +170,25 @@ export function useBookSource() {
         return newSource;
     };
 
-    const updateSource = async (patch: Partial<BookSource>) => {
-        if (!patch.id) return;
+    const updateSource = async (id: number, patch: Partial<BookSource>) => {
+        if (!id) return;
 
-        // 先获取原数据
-        const existing = await db.select().from(bookSources).where(eq(bookSources.id, patch.id)).get();
+        // 获取原数据
+        const existing = await db.select()
+            .from(bookSources)
+            .where(eq(bookSources.id, id))
+            .get();
         if (!existing) return;
+
 
         // 合并数据
         const updated = {
             ...existing,
             ...patch,
-            enabled: patch.enabled ? 1 : 0,
-            ruleGroups: patch.ruleGroups ? JSON.stringify(patch.ruleGroups) : existing.ruleGroups,
+            enabled: patch.enabled !== undefined ? (patch.enabled ? 1 : 0) : existing.enabled,
+            ruleGroups: patch.ruleGroups !== undefined
+                ? JSON.stringify(patch.ruleGroups)
+                : existing.ruleGroups,
         };
 
         // 更新到数据库
@@ -193,8 +197,10 @@ export function useBookSource() {
             .where(eq(bookSources.id, existing.id));
     };
 
-    const removeSource = (id: number) => {
-        db.delete(bookSources).where(eq(bookSources.id, id));
+
+    const removeSource = async (id: number) => {
+        console.log('removeSource', id);
+        await db.delete(bookSources).where(eq(bookSources.id, id));
     };
 
     const getSourceById = (id?: number) => {
@@ -210,9 +216,18 @@ export function useBookSource() {
         const result = db.select().from(bookSources).all();
         return result.map((item) => ({
             ...item,
+            enabled: item.enabled === 1,
             ruleGroups: item.ruleGroups ? JSON.parse(item.ruleGroups) : createDefaultSource().ruleGroups,
         }));
     };
+
+    // 启用停用
+    const toggleSourceEnabled = async (id: number, v: boolean) => {
+        console.log('toggleSourceEnabled', id, v);
+        await db.update(bookSources)
+            .set({enabled: v ? 1 : 0})
+            .where(eq(bookSources.id, id));
+    }
 
     return {
         addSource,
@@ -221,6 +236,7 @@ export function useBookSource() {
         getSourceById,
         createDefaultSource,
         getAllSources,
+        toggleSourceEnabled,
     };
 }
 
