@@ -27,7 +27,12 @@ export default function HomeScreen() {
                 </View>
             }
         >
-            <BookShelf/>
+            <BookShelf onBookPress={(book) => {
+                router.push({
+                    pathname: '/book/read/[id]',
+                    params: {id: book.id}
+                });
+            }}/>
         </ParallaxScrollView>
     );
 }

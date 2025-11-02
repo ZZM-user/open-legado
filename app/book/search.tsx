@@ -4,219 +4,204 @@ import {router, Stack} from 'expo-router';
 import {BookOpen, RotateCcw} from 'lucide-react-native';
 import {Input} from "tamagui";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
-import {useBookSource} from "@/hooks/use-book-source";
+import {BookSource, useBookSource} from "@/hooks/use-book-source";
+import xpath from 'xpath';
+import {DOMParser} from "xmldom";
+import {JSONPath} from 'jsonpath-plus';
+import {parseHTML} from "linkedom";
 
-// Define search result type
-export type SearchResult = {
+export interface RawSearchResult {
+    title: string;
+    author: string;
+    coverUrl: string;
+    intro: string;
+    detailUrl: string;
+}
+
+export interface SearchResult extends RawSearchResult {
     id: string;
-    title: string;
-    author: string;
-    coverUrl?: string;
-    intro?: string;
-    sourceId: string;
+    sourceId: number;
     sourceName: string;
-    detailUrl?: string;
-    allSourceIds?: string[]; // Additional field to track all sources that have this book
+}
+
+// 解析单个书源
+const parseSearchResults = (
+    htmlOrData: string,
+    ruleGroups: any,
+    source: BookSource
+): RawSearchResult[] => {
+    try {
+        const baseUrl = source.baseUrl;
+        const searchRules = ruleGroups.search || [];
+        const itemSelectorRule = searchRules.find((r: any) => r.key === 'itemSelector');
+        const itemType = source.ruleType;
+        if (!itemSelectorRule?.value) return [];
+
+        const titleSelector = searchRules.find((r: any) => r.key === 'titleSelector')?.value;
+        const authorSelector = searchRules.find((r: any) => r.key === 'authorSelector')?.value;
+        const coverSelector = searchRules.find((r: any) => r.key === 'coverSelector')?.value;
+        const introSelector = searchRules.find((r: any) => r.key === 'introSelector')?.value;
+        const detailSelector = searchRules.find((r: any) => r.key === 'detailSelector')?.value;
+
+        const results: RawSearchResult[] = [];
+
+        if (itemType === 'css') {
+            const {document} = parseHTML(htmlOrData);
+            const items = Array.from(document.querySelectorAll(itemSelectorRule.value));
+            items.forEach(item => {
+                const query = (selector?: string) => selector ? item.querySelector(selector)?.textContent?.trim() || '' : '';
+                const queryAttr = (selector?: string, attr = 'src') => {
+                    if (!selector) return '';
+                    const el = item.querySelector(selector);
+                    return el ? el.getAttribute(attr) || '' : '';
+                };
+
+                const title = query(titleSelector) || 'Unknown Title';
+                const author = query(authorSelector) || 'Unknown Author';
+                let coverUrl = queryAttr(coverSelector);
+                let detailUrl = queryAttr(detailSelector, 'href');
+                const intro = query(introSelector);
+
+                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
+                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
+                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
+                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
+
+                results.push({title, author, coverUrl, intro, detailUrl});
+            });
+        } else if (itemType === 'xpath') {
+            // const {document} = parseHTML(htmlOrData);
+            let document = new DOMParser().parseFromString(htmlOrData, 'text/html');
+            const nodes = xpath.select(itemSelectorRule.value, document) as Node[];
+            nodes.forEach(node => {
+                const getText = (selector?: string) => {
+                    if (!selector) return '';
+                    const n = xpath.select(selector, node)[0] as Node | undefined;
+                    return n?.textContent?.trim() ?? '';
+                };
+
+                const getAttr = (selector?: string, attr = 'src') => {
+                    if (!selector) return '';
+                    const n = xpath.select(selector, node)[0] as Element | undefined;
+                    return n?.getAttribute?.(attr) ?? '';
+                };
+
+                const title = getText(titleSelector) || 'Unknown Title';
+                const author = getText(authorSelector) || 'Unknown Author';
+                let coverUrl = getAttr(coverSelector);
+                let detailUrl = getAttr(detailSelector, 'href');
+                const intro = getText(introSelector);
+
+                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
+                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
+                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
+                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
+
+                results.push({title, author, coverUrl, intro, detailUrl});
+            });
+        } else if (itemType === 'jsonpath') {
+            let data: any;
+            try {
+                data = JSON.parse(htmlOrData);
+            } catch (e) {
+                console.error('Invalid JSON for jsonpath parsing', e);
+                return [];
+            }
+            const items = JSONPath({path: itemSelectorRule.value, json: data});
+            items.forEach((item: any) => {
+                const title = titleSelector ? item[titleSelector] || 'Unknown Title' : 'Unknown Title';
+                const author = authorSelector ? item[authorSelector] || 'Unknown Author' : 'Unknown Author';
+                let coverUrl = coverSelector ? item[coverSelector] || '' : '';
+                let detailUrl = detailSelector ? item[detailSelector] || '' : '';
+                const intro = introSelector ? item[introSelector] || '' : '';
+
+                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
+                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
+                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
+                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
+
+                results.push({title, author, coverUrl, intro, detailUrl});
+            });
+        } else if (itemType === 'regex') {
+            const itemRegex = new RegExp(itemSelectorRule.value, 'gi');
+            const itemMatches = htmlOrData.match(itemRegex) || [];
+            itemMatches.forEach(itemHtml => {
+                const extract = (selector?: string) => {
+                    if (!selector) return '';
+                    const match = itemHtml.match(new RegExp(selector, 'i'));
+                    return match ? match[1] || match[0] : '';
+                };
+                let title = extract(titleSelector) || 'Unknown Title';
+                let author = extract(authorSelector) || 'Unknown Author';
+                let coverUrl = extract(coverSelector);
+                let detailUrl = extract(detailSelector);
+                const intro = extract(introSelector);
+
+                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
+                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
+                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
+                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
+
+                results.push({title, author, coverUrl, intro, detailUrl});
+            });
+        }
+
+        return results;
+    } catch (e) {
+        console.error('parseSearchResults error:', e);
+        return [];
+    }
 };
 
-// Define actual search result from source
-export type RawSearchResult = {
-    title: string;
-    author: string;
-    coverUrl?: string;
-    intro?: string;
-    detailUrl?: string;
-};
-
-// Search service to handle book source search
+// 主搜索函数
 export const searchWithBookSources = async (
     query: string,
     sources: any[]
 ): Promise<SearchResult[]> => {
     const results: SearchResult[] = [];
+    const enabledSources = sources.filter((s: any) => s.enabled);
 
-    // Filter enabled sources
-    const enabledSources = sources.filter((source: any) => source.enabled);
-
-    // Parallel search across all enabled sources
-    const searchPromises = enabledSources.map(async (source) => {
+    const promises = enabledSources.map(async source => {
         try {
-            // Extract search URL template from source rules
-            const searchRules = source.ruleGroups.search;
-            const searchUrlRule = searchRules.find((rule: any) => rule.key === 'searchUrl');
-            const searchUrlTemplate = searchUrlRule?.value || '';
-
-            if (!searchUrlTemplate) {
-                console.warn(`No search URL configured for source: ${source.name}`);
-                return [];
+            let ruleGroups = source.ruleGroups;
+            if (typeof ruleGroups === 'string') {
+                ruleGroups = JSON.parse(ruleGroups);
             }
+            const searchUrlRule = ruleGroups.search.find((r: any) => r.key === 'searchUrl');
+            if (!searchUrlRule?.value) return [];
 
-            // Replace placeholder with actual search query
-            const searchUrl = searchUrlTemplate.replace('{{key}}', encodeURIComponent(query));
+            let searchUrl = searchUrlRule.value.replace('{{key}}', encodeURIComponent(query));
+            searchUrl = new URL(searchUrl, source.baseUrl).toString();
 
-            // Add base URL if search URL is relative
-            let fullSearchUrl = searchUrl;
-            if (searchUrl.startsWith('/')) {
-                fullSearchUrl = new URL(searchUrl, source.baseUrl).toString();
-            } else if (!searchUrl.startsWith('http')) {
-                fullSearchUrl = source.baseUrl + searchUrl;
-            }
-
-            // Prepare headers from source configuration
-            const headersRule = searchRules.find((rule: any) => rule.key === 'headers');
-            const headers = headersRule?.value ? JSON.parse(headersRule.value) : {};
-
-            // Make the actual HTTP request
-            const response = await fetch(fullSearchUrl, {
-                method: 'GET',
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; OpenLegado)',
-                    ...headers
+            let headers: Record<string, string> = {};
+            const headersRule = ruleGroups.search.find((r: any) => r.key === 'headers');
+            if (headersRule?.value) {
+                try {
+                    headers = JSON.parse(headersRule.value);
+                } catch {
                 }
-            });
-
-            if (!response.ok) {
-                console.error(`Failed to search with source: ${source.name}`, response.status);
-                return [];
             }
 
-            const html = await response.text();
+            const res = await fetch(searchUrl, {method: 'GET', headers});
+            if (!res.ok) return [];
+            const htmlOrData = await res.text();
 
-            // Parse search results based on source configuration
-            const parsedResults = parseSearchResults(html, searchRules, source.baseUrl);
-
-            // Map to our SearchResult format with source info
-            return parsedResults.map((rawResult: RawSearchResult, index: number) => ({
-                id: `${source.id}-${Date.now()}-${index}`,
-                title: rawResult.title,
-                author: rawResult.author,
-                coverUrl: rawResult.coverUrl,
-                intro: rawResult.intro,
+            const parsedResults = parseSearchResults(htmlOrData, ruleGroups, source);
+            return parsedResults.map((r, i) => ({
+                ...r,
+                id: `${source.id}-${Date.now()}-${i}`,
                 sourceId: source.id,
-                sourceName: source.name,
-                detailUrl: rawResult.detailUrl
+                sourceName: source.name
             }));
-        } catch (error) {
-            console.error(`Error searching with source ${source.name}:`, error);
+        } catch (e) {
+            console.error(`Error fetching source ${source.name}:`, e);
             return [];
         }
     });
 
-    // Wait for all source searches to complete
-    const allResults = await Promise.all(searchPromises);
-
-    // Flatten results from all sources
-    allResults.forEach(sourceResults => {
-        results.push(...sourceResults);
-    });
-
+    const all = await Promise.all(promises);
+    all.forEach(arr => results.push(...arr));
     return results;
-};
-
-// Parse search results based on source rules (simplified version)
-const parseSearchResults = (
-    html: string,
-    searchRules: any[],
-    baseUrl: string
-): RawSearchResult[] => {
-    try {
-        // For now, using regex-based parsing as we don't have a full DOM parser in React Native
-        // In a real app, you would want to implement a proper HTML/XML parser
-        const itemSelectorRule = searchRules.find((rule: any) => rule.key === 'itemSelector');
-        const titleSelectorRule = searchRules.find((rule: any) => rule.key === 'titleSelector');
-        const authorSelectorRule = searchRules.find((rule: any) => rule.key === 'authorSelector');
-        const coverSelectorRule = searchRules.find((rule: any) => rule.key === 'coverSelector');
-        const introSelectorRule = searchRules.find((rule: any) => rule.key === 'introSelector');
-        const detailSelectorRule = searchRules.find((rule: any) => rule.key === 'detailSelector');
-
-        if (!itemSelectorRule || !itemSelectorRule.value) {
-            return [];
-        }
-
-        // Simple regex-based parsing (this is a simplified example)
-        // In a real implementation, you'd use a proper HTML parser
-        const itemSelector = itemSelectorRule.value;
-
-        // Extract item elements using simple regex (this is limited, but works for basic cases)
-        // Note: Real implementation would need a proper HTML parser
-        const itemRegex = new RegExp(`<div[^>]*class=["'][^"']*${itemSelector.replace('.', '')}[^"']*["'][^>]*>.*?</div>`, 'gi');
-        const itemMatches = html.match(itemRegex) || [];
-
-        const results: RawSearchResult[] = [];
-
-        for (const itemHtml of itemMatches) {
-            // Extract title
-            let title = '';
-            if (titleSelectorRule && titleSelectorRule.value) {
-                const titleRegex = new RegExp(titleSelectorRule.value.replace('.', '\\.'));
-                const titleMatch = itemHtml.match(titleRegex);
-                title = titleMatch ? titleMatch[1] || titleMatch[0] : 'Unknown Title';
-            }
-
-            // Extract author
-            let author = '';
-            if (authorSelectorRule && authorSelectorRule.value) {
-                const authorRegex = new RegExp(authorSelectorRule.value.replace('.', '\\.'));
-                const authorMatch = itemHtml.match(authorRegex);
-                author = authorMatch ? authorMatch[1] || authorMatch[0] : 'Unknown Author';
-            }
-
-            // Extract cover
-            let coverUrl = '';
-            if (coverSelectorRule && coverSelectorRule.value) {
-                const coverRegex = new RegExp(coverSelectorRule.value.replace('.', '\\.'));
-                const coverMatch = itemHtml.match(coverRegex);
-                if (coverMatch) {
-                    coverUrl = coverMatch[1] || coverMatch[0];
-                    // Resolve relative URLs
-                    if (coverUrl.startsWith('//')) {
-                        coverUrl = 'https:' + coverUrl;
-                    } else if (coverUrl.startsWith('/')) {
-                        coverUrl = new URL(coverUrl, baseUrl).toString();
-                    }
-                }
-            }
-
-            // Extract intro
-            let intro = '';
-            if (introSelectorRule && introSelectorRule.value) {
-                const introRegex = new RegExp(introSelectorRule.value.replace('.', '\\.'));
-                const introMatch = itemHtml.match(introRegex);
-                intro = introMatch ? introMatch[1] || introMatch[0] : '';
-            }
-
-            // Extract detail URL
-            let detailUrl = '';
-            if (detailSelectorRule && detailSelectorRule.value) {
-                const detailRegex = new RegExp(detailSelectorRule.value.replace('.', '\\.'));
-                const detailMatch = itemHtml.match(detailRegex);
-                if (detailMatch) {
-                    detailUrl = detailMatch[1] || detailMatch[0];
-                    // Resolve relative URLs
-                    if (detailUrl.startsWith('//')) {
-                        detailUrl = 'https:' + detailUrl;
-                    } else if (detailUrl.startsWith('/')) {
-                        detailUrl = new URL(detailUrl, baseUrl).toString();
-                    }
-                }
-            }
-
-            if (title) {
-                results.push({
-                    title: title,
-                    author: author,
-                    coverUrl: coverUrl,
-                    intro: intro,
-                    detailUrl: detailUrl
-                });
-            }
-        }
-
-        return results;
-    } catch (error) {
-        console.error('Error parsing search results:', error);
-        return [];
-    }
 };
 
 export default function SearchScreen() {
@@ -225,8 +210,9 @@ export default function SearchScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const {getAllSources} = useBookSource();
 
-    const {sources} = useBookSource();
+    const [sources, setSources] = useState(getAllSources() || []);
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) {
@@ -252,11 +238,11 @@ export default function SearchScreen() {
 
     // Enhanced aggregate results - remove duplicates based on title and author, but track multiple sources
     const aggregateSearchResults = (results: SearchResult[]): SearchResult[] => {
-        const uniqueResultsMap = new Map<string, SearchResult & { allSourceIds: string[] }>();
+        const uniqueResultsMap = new Map<number, SearchResult & { allSourceIds: number[] }>();
 
         for (const result of results) {
             // Create a key using title and author to identify duplicates
-            const key = `${result.title.toLowerCase().trim()}-${result.author.toLowerCase().trim()}`;
+            const key = Number(`${result.title.toLowerCase().trim()}-${result.author.toLowerCase().trim()}`);
 
             if (!uniqueResultsMap.has(key)) {
                 // If we don't have a result with this key yet, add it with source tracking
@@ -299,7 +285,7 @@ export default function SearchScreen() {
                 sourceId: result.sourceId,
                 sourceName: result.sourceName,
                 detailUrl: result.detailUrl,
-                allSourceIds: JSON.stringify(result.allSourceIds || [result.sourceId])
+                allSourceIds: JSON.stringify(result.sourceId || [result.sourceId])
             }
         });
     };

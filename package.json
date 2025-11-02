@@ -19,6 +19,7 @@
     "@tamagui/config": "^1.135.7",
     "@tamagui/stacks": "^1.135.7",
     "babel-plugin-inline-import": "^3.0.0",
+    "cheerio-without-node-native": "^0.20.2",
     "drizzle-orm": "^0.44.7",
     "expo": "~54.0.20",
     "expo-constants": "~18.0.10",
@@ -34,6 +35,9 @@
     "expo-symbols": "~1.0.7",
     "expo-system-ui": "~6.0.8",
     "expo-web-browser": "~15.0.8",
+    "fontoxpath": "^3.33.2",
+    "jsonpath-plus": "^10.3.0",
+    "linkedom": "^0.18.12",
     "lucide-react-native": "^0.552.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -44,10 +48,13 @@
     "react-native-screens": "~4.16.0",
     "react-native-web": "~0.21.0",
     "react-native-worklets": "0.5.1",
-    "tamagui": "^1.135.7"
+    "tamagui": "^1.135.7",
+    "xmldom": "^0.6.0",
+    "xpath": "^0.0.34"
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "@types/xmldom": "^0.1.34",
     "drizzle-kit": "^0.31.6",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",

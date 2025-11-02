@@ -1,51 +1,30 @@
-import { useCallback, useMemo, useState } from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import {db} from '@/db/drizzle';
+import {eq} from 'drizzle-orm';
+import {books as booksTable} from '@/db/schema';
 
 export type Book = {
-    id: string;
+    id: number;
     title: string;
-    author: string;
-    coverUrl: string;
-    lastReadChapter?: string;
-    progress?: number;
+    author: string | null;
+    coverUrl: string | null;
+    progress: number | null;
+    lastReadChapter: string | null;
+    groupId: number | null;
+    createdTime: number | null;
+    updatedTime: number | null;
 };
 
-const defaultBooks: Book[] = [
-    {
-        id: '1',
-        title: '斗破苍穹',
-        author: '天蚕土豆',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第125章',
-        progress: 65,
-    },
-    {
-        id: '2',
-        title: '仙逆',
-        author: '耳根',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第312章',
-        progress: 40,
-    },
-    {
-        id: '3',
-        title: '凡人修仙传',
-        author: '忘语',
-        coverUrl: 'https://www.favddd.com/assets/images/book-image.jpg',
-        lastReadChapter: '第208章',
-        progress: 80,
-    },
-];
-
 export type UseBookshelfOptions = {
-    initialBooks?: Book[];
+    initialBooks?: Book[]; // 可选预加载
 };
 
 export type BookshelfActions = {
-    addBook: (book: Book) => void;
-    removeBook: (bookId: string) => void;
-    clearBooks: () => void;
-    replaceBooks: (books: Book[]) => void;
-    upsertBook: (book: Book) => void;
+    addBook: (book: Book) => Promise<void>;
+    removeBook: (bookId: string) => Promise<void>;
+    clearBooks: () => Promise<void>;
+    replaceBooks: (books: Book[]) => Promise<void>;
+    upsertBook: (book: Book) => Promise<void>;
 };
 
 export type UseBookshelfResult = {
@@ -55,52 +34,66 @@ export type UseBookshelfResult = {
 } & BookshelfActions;
 
 export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfResult {
-    const [books, setBooks] = useState<Book[]>(options.initialBooks ?? defaultBooks);
+    const [books, setBooks] = useState<Book[]>(options.initialBooks ?? []);
 
-    const upsertBook = useCallback((book: Book) => {
-        setBooks((prev) => {
-            const index = prev.findIndex((item) => item.id === book.id);
-            if (index === -1) {
-                return [book, ...prev];
-            }
-
-            const cloned = [...prev];
-            cloned[index] = { ...cloned[index], ...book };
-            return cloned;
-        });
+    // 初始加载
+    useEffect(() => {
+        (async () => {
+            const dbBooks = await db.select().from(booksTable);
+            setBooks(dbBooks);
+        })();
     }, []);
 
-    const addBook = useCallback((book: Book) => {
-        upsertBook(book);
+    // 是否存在
+    const hasBook = useCallback((bookId: number) => books.some((b) => b.id === bookId), [books]);
+
+    const totalBooks = useMemo(() => books.length, [books]);
+
+    // 添加或更新
+    const upsertBook = useCallback(async (book: Book) => {
+        const exists = await db.select().from(booksTable).where(eq(booksTable.id, book.id)).get();
+
+        if (exists) {
+            await db.update(booksTable).set(book).where(eq(booksTable.id, book.id));
+        } else {
+            await db.insert(booksTable).values(book);
+        }
+
+        const dbBooks = await db.select().from(booksTable);
+        setBooks(dbBooks);
+    }, []);
+
+    const addBook = useCallback(async (book: Book) => {
+        await upsertBook(book);
     }, [upsertBook]);
 
-    const removeBook = useCallback((bookId: string) => {
-        setBooks((prev) => prev.filter((item) => item.id !== bookId));
+    const removeBook = useCallback(async (bookId: string) => {
+        await db.delete(booksTable).where(eq(booksTable.id, bookId));
+        const dbBooks = await db.select().from(booksTable);
+        setBooks(dbBooks);
     }, []);
 
-    const clearBooks = useCallback(() => {
+    const clearBooks = useCallback(async () => {
+        await db.delete(booksTable);
         setBooks([]);
     }, []);
 
-    const replaceBooks = useCallback((nextBooks: Book[]) => {
+    const replaceBooks = useCallback(async (nextBooks: Book[]) => {
+        await db.delete(booksTable); // 清空
+        if (nextBooks.length > 0) {
+            await db.insert(booksTable).values(nextBooks);
+        }
         setBooks(nextBooks);
     }, []);
-
-    const hasBook = useCallback((bookId: string) => books.some((item) => item.id === bookId), [books]);
-
-    const totalBooks = useMemo(() => books.length, [books]);
 
     return {
         books,
         totalBooks,
+        hasBook,
         addBook,
-        upsertBook,
         removeBook,
         clearBooks,
         replaceBooks,
-        hasBook,
+        upsertBook,
     };
 }
-
-export const BookshelfDefaults = Object.freeze(defaultBooks);
-
