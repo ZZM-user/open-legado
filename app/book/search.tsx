@@ -1,219 +1,13 @@
-import {useEffect, useState} from 'react';
+import {useState} from 'react';
 import {ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {router, Stack} from 'expo-router';
 import {BookOpen, RotateCcw} from 'lucide-react-native';
 import ParallaxScrollView from "@/components/parallax-scroll-view";
-import {BookSource, useBookSource} from "@/hooks/use-book-source";
-import xpath from 'xpath';
-import {JSONPath} from 'jsonpath-plus';
-import {DOMParser} from '@xmldom/xmldom';
+import {useBookSource} from "@/hooks/use-book-source";
 import {useBookStore} from "@/store/bookStore";
+import {SearchResult} from "@/hooks/parsers/base/parser.types";
+import {createParser} from "@/hooks/parsers/base/bookParserFactory";
 
-export interface BookSearchSource {
-    id?: number;
-    name: string;
-    detailUrl: string;
-}
-
-export interface RawSearchResult {
-    id?: string;
-    title: string;
-    author: string;
-    coverUrl: string;
-    intro: string;
-    detailUrl: string;
-}
-
-export interface SearchResult extends RawSearchResult {
-    bookSourceId?: number;
-    bookSourceName: string;
-    bookSearchSources: BookSearchSource[];
-}
-
-// 解析单个书源
-async function* parseSearchResults(
-    htmlOrData: string,
-    ruleGroups: any,
-    source: BookSource
-): AsyncGenerator<RawSearchResult> {
-    try {
-        const baseUrl = source.baseUrl;
-        const searchRules = ruleGroups.search || [];
-        const itemSelectorRule = searchRules.find((r: any) => r.key === 'itemSelector');
-        const itemType = source.ruleType;
-        if (!itemSelectorRule?.value) return [];
-
-        const titleSelector = searchRules.find((r: any) => r.key === 'titleSelector')?.value;
-        const authorSelector = searchRules.find((r: any) => r.key === 'authorSelector')?.value;
-        const coverSelector = searchRules.find((r: any) => r.key === 'coverSelector')?.value;
-        const introSelector = searchRules.find((r: any) => r.key === 'introSelector')?.value;
-        const detailSelector = searchRules.find((r: any) => r.key === 'detailSelector')?.value;
-
-        if (itemType === 'css') {
-            // const {document} = parseHTML(htmlOrData);
-            const parser = new DOMParser();
-            const document = parser.parseFromString(htmlOrData, 'text/xml');
-            const items = Array.from(document.querySelectorAll(itemSelectorRule.value));
-
-            for (const item of items) {
-                const query = (selector?: string) => selector ? item.querySelector(selector)?.textContent?.trim() || '' : '';
-                const queryAttr = (selector?: string, attr = 'src') => {
-                    if (!selector) return '';
-                    const el = item.querySelector(selector);
-                    return el ? el.getAttribute(attr) || '' : '';
-                };
-
-                const title = query(titleSelector) || 'Unknown Title';
-                const author = query(authorSelector) || 'Unknown Author';
-                let coverUrl = queryAttr(coverSelector);
-                let detailUrl = queryAttr(detailSelector, 'href');
-                const intro = query(introSelector);
-
-                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
-                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
-                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
-                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
-
-
-                yield {title, author, coverUrl, intro, detailUrl};
-            }
-        } else if (itemType === 'xpath') {
-            htmlOrData = htmlOrData
-                // 1. 替换常见 HTML 实体
-                .replace(/&nbsp;/g, ' ')
-                .replace(/&copy;/g, '©')
-                .replace(/&quot;/g, '"')
-                .replace(/&apos;/g, "'")
-                // 2. 移除或简化 DTD 声明（xmldom 严格性来源）
-                // 替换 <!DOCTYPE ... > 为空字符串或简单的 <!DOCTYPE html>
-                .replace(/<!DOCTYPE[^>]*>/i, '<!DOCTYPE html>')
-            const document = new DOMParser({
-                locator: {},
-                errorHandler: {
-                    warning: function (w) {
-                    },
-                    error: function (e) {
-                    },
-                    fatalError: function (e) {
-                        console.error(e)
-                    }
-                }
-            }).parseFromString(htmlOrData);
-            const nodes = xpath.select(itemSelectorRule.value, document) as Node[];
-            for (const node of nodes) {
-                // 1. 提取 Title (String value)
-                // 强制断言结果为 string[]，并取第一个元素
-                const title = extractStringValue(titleSelector, node, '');
-                const author = extractStringValue(authorSelector, node, '')
-                let coverUrl = extractStringValue(coverSelector, node, '')
-                let detailUrl = extractStringValue(detailSelector, node, '')
-                const intro = extractStringValue(introSelector, node, '')
-
-                // URL 修复逻辑 (不变)
-                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
-                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
-                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
-                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
-
-                yield {title, author, coverUrl, intro, detailUrl};
-            }
-        } else if (itemType === 'jsonpath') {
-            let data: any;
-            try {
-                data = JSON.parse(htmlOrData);
-            } catch (e) {
-                console.error('Invalid JSON for jsonpath parsing', e);
-                return [];
-            }
-            const items = JSONPath({path: itemSelectorRule.value, json: data});
-            for (const item of items) {
-                const title = titleSelector ? item[titleSelector] || 'Unknown Title' : 'Unknown Title';
-                const author = authorSelector ? item[authorSelector] || 'Unknown Author' : 'Unknown Author';
-                let coverUrl = coverSelector ? item[coverSelector] || '' : '';
-                let detailUrl = detailSelector ? item[detailSelector] || '' : '';
-                const intro = introSelector ? item[introSelector] || '' : '';
-
-                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
-                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
-                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
-                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
-
-                yield {title, author, coverUrl, intro, detailUrl};
-            }
-        } else if (itemType === 'regex') {
-            const itemRegex = new RegExp(itemSelectorRule.value, 'gi');
-            const itemMatches = htmlOrData.match(itemRegex) || [];
-            for (const itemHtml of itemMatches) {
-                const extract = (selector?: string) => {
-                    if (!selector) return '';
-                    const match = itemHtml.match(new RegExp(selector, 'i'));
-                    return match ? match[1] || match[0] : '';
-                };
-                let title = extract(titleSelector) || 'Unknown Title';
-                let author = extract(authorSelector) || 'Unknown Author';
-                let coverUrl = extract(coverSelector);
-                let detailUrl = extract(detailSelector);
-                const intro = extract(introSelector);
-
-                if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
-                else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
-                if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
-                else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
-
-                yield {title, author, coverUrl, intro, detailUrl};
-            }
-        }
-    } catch (e) {
-        console.error('parseSearchResults error:', e);
-        return [];
-    }
-};
-
-const extractStringValue = (
-    selector: string | undefined,
-    contextNode: Node,
-    defaultValue: string = ''
-): string => {
-    // 检查选择器是否存在
-    if (!selector) {
-        return defaultValue;
-    }
-
-    try {
-        // 执行 XPath 选择，使用双重断言处理类型问题
-        const results = xpath.select(`./${selector}`, contextNode) as unknown as string[];
-
-        // 1. 检查结果是否为空数组
-        if (!results || results.length === 0) {
-            console.warn(`XPath extraction failed: No match found for selector: ${selector}`);
-            return defaultValue; // 返回默认值
-        }
-
-        let rawValue: string | null = results[0];
-
-        // 2. 检查结果类型：如果 XPath 选择了 text() 或 @attribute，结果可能是字符串或 Node。
-        // 如果是 Node，需要提取其文本内容。
-        if (typeof rawValue === 'object' && rawValue !== null && 'textContent' in rawValue) {
-            // 假设它是一个 Node 对象
-            rawValue = (rawValue as Node).textContent;
-        }
-        // 如果结果是 number 或其他非字符串类型，可能需要进一步处理，但通常 XPath 提取字符串值不会是纯数字。
-
-        // 3. 确保结果是字符串，然后 trim。
-        if (typeof rawValue === 'string') {
-            return rawValue.trim();
-        }
-
-        // 4. 处理非字符串但存在的值（可能是 null/undefined，但经过前两步应该排除了）
-        console.warn(`XPath extraction failed: Result is not a string for selector: ${selector}`);
-        return defaultValue;
-
-    } catch (error) {
-        // 如果 XPath 表达式本身有问题，或者解析失败，返回默认值
-        console.warn(`XPath extraction failed for selector: ${selector}`, error);
-        return defaultValue;
-    }
-};
 
 // 主搜索函数
 export async function* searchWithBookSources(
@@ -247,7 +41,7 @@ export async function* searchWithBookSources(
             if (!res.ok) return;
             const htmlOrData = await res.text();
 
-            for await (const result of parseSearchResults(htmlOrData, ruleGroups, source)) {
+            for await (const result of createParser(source.ruleType).search(htmlOrData, source)) {
                 yield {
                     ...result,
                     id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`,
@@ -378,12 +172,6 @@ export default function SearchScreen() {
         setIsRefreshing(true);
         handleSearch();
     };
-
-    useEffect(() => {
-        // Set up stack navigation options
-        // Note: router.setOptions might not be available in all expo-router versions
-        // The Stack.Screen component handles this in the render method instead
-    }, []);
 
     return (
         <ParallaxScrollView
