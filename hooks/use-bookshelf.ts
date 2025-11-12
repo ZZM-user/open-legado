@@ -4,7 +4,7 @@ import {eq} from 'drizzle-orm';
 import {books as booksTable} from '@/db/schema';
 
 export type Book = {
-    id: number;
+    id: string;
     title: string;
     author: string | null;
     coverUrl: string | null;
@@ -46,7 +46,7 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
     }, []);
 
     // 是否存在
-    const hasBook = useCallback((bookId: number) => books.some((b) => b.id === bookId), [books]);
+    const hasBook = useCallback((bookId: string) => books.some((b) => b.id === bookId), [books]);
 
     const totalBooks = useMemo(() => books.length, [books]);
 
@@ -68,7 +68,7 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         await upsertBook(book);
     }, [upsertBook]);
 
-    const removeBook = useCallback(async (bookId: number) => {
+    const removeBook = useCallback(async (bookId: string) => {
         await db.delete(booksTable).where(eq(booksTable.id, bookId));
         const dbBooks = await db.select().from(booksTable);
         setBooks(dbBooks);
@@ -87,8 +87,8 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         setBooks(nextBooks);
     }, []);
 
-    const getBookById = (bookId: number) => {
-        return db.select().from(booksTable).where(eq(booksTable.id, bookId)).get();
+    const getBookById = (bookId: string): Book | null => {
+        return db.select().from(booksTable).where(eq(booksTable.id, bookId)).get() || null;
     };
 
     return {

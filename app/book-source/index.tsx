@@ -7,14 +7,14 @@ import {useCallback, useState} from "react";
 
 export default function BookSourceListScreen() {
     const router = useRouter();
-    const {getAllSources, updateSource, removeSource, toggleSourceEnabled} = useBookSource();
+    const {getAllSources, addSource, updateSource, removeSource, toggleSourceEnabled} = useBookSource();
     const [sources, setSources] = useState(getAllSources() || []);
 
     useFocusEffect(
         useCallback(() => {
             const latestSources = getAllSources() || [];
             setSources(latestSources);
-            console.log('sources', latestSources);
+            // console.log('sources', JSON.stringify(latestSources));
         }, [])
     );
 

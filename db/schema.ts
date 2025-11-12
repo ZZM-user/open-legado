@@ -16,7 +16,7 @@ export const bookshelfGroups = sqliteTable('bookshelf_groups', {
 
 // 书架表
 export const books = sqliteTable('books', {
-    id: integer('id').primaryKey({autoIncrement: true}),
+    id: text('id').primaryKey(),
     title: text('title').notNull(),
     author: text('author'),
     coverUrl: text('cover_url'),

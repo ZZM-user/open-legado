@@ -1,16 +1,22 @@
 import {useEffect, useState} from 'react';
-import {ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View} from 'react-native';
 import {router, Stack} from 'expo-router';
 import {BookOpen, RotateCcw} from 'lucide-react-native';
-import {Input} from "tamagui";
 import ParallaxScrollView from "@/components/parallax-scroll-view";
 import {BookSource, useBookSource} from "@/hooks/use-book-source";
 import xpath from 'xpath';
-import {DOMParser} from "xmldom";
 import {JSONPath} from 'jsonpath-plus';
-import {parseHTML} from "linkedom";
+import {DOMParser} from '@xmldom/xmldom';
+import {useBookStore} from "@/store/bookStore";
+
+export interface BookSearchSource {
+    id?: number;
+    name: string;
+    detailUrl: string;
+}
 
 export interface RawSearchResult {
+    id?: string;
     title: string;
     author: string;
     coverUrl: string;
@@ -19,17 +25,17 @@ export interface RawSearchResult {
 }
 
 export interface SearchResult extends RawSearchResult {
-    id: string;
-    sourceId: number;
-    sourceName: string;
+    bookSourceId?: number;
+    bookSourceName: string;
+    bookSearchSources: BookSearchSource[];
 }
 
 // 解析单个书源
-const parseSearchResults = (
+async function* parseSearchResults(
     htmlOrData: string,
     ruleGroups: any,
     source: BookSource
-): RawSearchResult[] => {
+): AsyncGenerator<RawSearchResult> {
     try {
         const baseUrl = source.baseUrl;
         const searchRules = ruleGroups.search || [];
@@ -43,12 +49,13 @@ const parseSearchResults = (
         const introSelector = searchRules.find((r: any) => r.key === 'introSelector')?.value;
         const detailSelector = searchRules.find((r: any) => r.key === 'detailSelector')?.value;
 
-        const results: RawSearchResult[] = [];
-
         if (itemType === 'css') {
-            const {document} = parseHTML(htmlOrData);
+            // const {document} = parseHTML(htmlOrData);
+            const parser = new DOMParser();
+            const document = parser.parseFromString(htmlOrData, 'text/xml');
             const items = Array.from(document.querySelectorAll(itemSelectorRule.value));
-            items.forEach(item => {
+
+            for (const item of items) {
                 const query = (selector?: string) => selector ? item.querySelector(selector)?.textContent?.trim() || '' : '';
                 const queryAttr = (selector?: string, attr = 'src') => {
                     if (!selector) return '';
@@ -67,38 +74,49 @@ const parseSearchResults = (
                 if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
                 else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
 
-                results.push({title, author, coverUrl, intro, detailUrl});
-            });
+
+                yield {title, author, coverUrl, intro, detailUrl};
+            }
         } else if (itemType === 'xpath') {
-            // const {document} = parseHTML(htmlOrData);
-            let document = new DOMParser().parseFromString(htmlOrData, 'text/html');
+            htmlOrData = htmlOrData
+                // 1. 替换常见 HTML 实体
+                .replace(/&nbsp;/g, ' ')
+                .replace(/&copy;/g, '©')
+                .replace(/&quot;/g, '"')
+                .replace(/&apos;/g, "'")
+                // 2. 移除或简化 DTD 声明（xmldom 严格性来源）
+                // 替换 <!DOCTYPE ... > 为空字符串或简单的 <!DOCTYPE html>
+                .replace(/<!DOCTYPE[^>]*>/i, '<!DOCTYPE html>')
+            const document = new DOMParser({
+                locator: {},
+                errorHandler: {
+                    warning: function (w) {
+                    },
+                    error: function (e) {
+                    },
+                    fatalError: function (e) {
+                        console.error(e)
+                    }
+                }
+            }).parseFromString(htmlOrData);
             const nodes = xpath.select(itemSelectorRule.value, document) as Node[];
-            nodes.forEach(node => {
-                const getText = (selector?: string) => {
-                    if (!selector) return '';
-                    const n = xpath.select(selector, node)[0] as Node | undefined;
-                    return n?.textContent?.trim() ?? '';
-                };
+            for (const node of nodes) {
+                // 1. 提取 Title (String value)
+                // 强制断言结果为 string[]，并取第一个元素
+                const title = extractStringValue(titleSelector, node, '');
+                const author = extractStringValue(authorSelector, node, '')
+                let coverUrl = extractStringValue(coverSelector, node, '')
+                let detailUrl = extractStringValue(detailSelector, node, '')
+                const intro = extractStringValue(introSelector, node, '')
 
-                const getAttr = (selector?: string, attr = 'src') => {
-                    if (!selector) return '';
-                    const n = xpath.select(selector, node)[0] as Element | undefined;
-                    return n?.getAttribute?.(attr) ?? '';
-                };
-
-                const title = getText(titleSelector) || 'Unknown Title';
-                const author = getText(authorSelector) || 'Unknown Author';
-                let coverUrl = getAttr(coverSelector);
-                let detailUrl = getAttr(detailSelector, 'href');
-                const intro = getText(introSelector);
-
+                // URL 修复逻辑 (不变)
                 if (coverUrl.startsWith('//')) coverUrl = 'https:' + coverUrl;
                 else if (coverUrl.startsWith('/')) coverUrl = new URL(coverUrl, baseUrl).toString();
                 if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
                 else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
 
-                results.push({title, author, coverUrl, intro, detailUrl});
-            });
+                yield {title, author, coverUrl, intro, detailUrl};
+            }
         } else if (itemType === 'jsonpath') {
             let data: any;
             try {
@@ -108,7 +126,7 @@ const parseSearchResults = (
                 return [];
             }
             const items = JSONPath({path: itemSelectorRule.value, json: data});
-            items.forEach((item: any) => {
+            for (const item of items) {
                 const title = titleSelector ? item[titleSelector] || 'Unknown Title' : 'Unknown Title';
                 const author = authorSelector ? item[authorSelector] || 'Unknown Author' : 'Unknown Author';
                 let coverUrl = coverSelector ? item[coverSelector] || '' : '';
@@ -120,12 +138,12 @@ const parseSearchResults = (
                 if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
                 else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
 
-                results.push({title, author, coverUrl, intro, detailUrl});
-            });
+                yield {title, author, coverUrl, intro, detailUrl};
+            }
         } else if (itemType === 'regex') {
             const itemRegex = new RegExp(itemSelectorRule.value, 'gi');
             const itemMatches = htmlOrData.match(itemRegex) || [];
-            itemMatches.forEach(itemHtml => {
+            for (const itemHtml of itemMatches) {
                 const extract = (selector?: string) => {
                     if (!selector) return '';
                     const match = itemHtml.match(new RegExp(selector, 'i'));
@@ -142,33 +160,76 @@ const parseSearchResults = (
                 if (detailUrl.startsWith('//')) detailUrl = 'https:' + detailUrl;
                 else if (detailUrl.startsWith('/')) detailUrl = new URL(detailUrl, baseUrl).toString();
 
-                results.push({title, author, coverUrl, intro, detailUrl});
-            });
+                yield {title, author, coverUrl, intro, detailUrl};
+            }
         }
-
-        return results;
     } catch (e) {
         console.error('parseSearchResults error:', e);
         return [];
     }
 };
 
+const extractStringValue = (
+    selector: string | undefined,
+    contextNode: Node,
+    defaultValue: string = ''
+): string => {
+    // 检查选择器是否存在
+    if (!selector) {
+        return defaultValue;
+    }
+
+    try {
+        // 执行 XPath 选择，使用双重断言处理类型问题
+        const results = xpath.select(`./${selector}`, contextNode) as unknown as string[];
+
+        // 1. 检查结果是否为空数组
+        if (!results || results.length === 0) {
+            console.warn(`XPath extraction failed: No match found for selector: ${selector}`);
+            return defaultValue; // 返回默认值
+        }
+
+        let rawValue: string | null = results[0];
+
+        // 2. 检查结果类型：如果 XPath 选择了 text() 或 @attribute，结果可能是字符串或 Node。
+        // 如果是 Node，需要提取其文本内容。
+        if (typeof rawValue === 'object' && rawValue !== null && 'textContent' in rawValue) {
+            // 假设它是一个 Node 对象
+            rawValue = (rawValue as Node).textContent;
+        }
+        // 如果结果是 number 或其他非字符串类型，可能需要进一步处理，但通常 XPath 提取字符串值不会是纯数字。
+
+        // 3. 确保结果是字符串，然后 trim。
+        if (typeof rawValue === 'string') {
+            return rawValue.trim();
+        }
+
+        // 4. 处理非字符串但存在的值（可能是 null/undefined，但经过前两步应该排除了）
+        console.warn(`XPath extraction failed: Result is not a string for selector: ${selector}`);
+        return defaultValue;
+
+    } catch (error) {
+        // 如果 XPath 表达式本身有问题，或者解析失败，返回默认值
+        console.warn(`XPath extraction failed for selector: ${selector}`, error);
+        return defaultValue;
+    }
+};
+
 // 主搜索函数
-export const searchWithBookSources = async (
+export async function* searchWithBookSources(
     query: string,
     sources: any[]
-): Promise<SearchResult[]> => {
-    const results: SearchResult[] = [];
+): AsyncGenerator<SearchResult> {
     const enabledSources = sources.filter((s: any) => s.enabled);
 
-    const promises = enabledSources.map(async source => {
+    for (const source of enabledSources) {
         try {
             let ruleGroups = source.ruleGroups;
             if (typeof ruleGroups === 'string') {
                 ruleGroups = JSON.parse(ruleGroups);
             }
             const searchUrlRule = ruleGroups.search.find((r: any) => r.key === 'searchUrl');
-            if (!searchUrlRule?.value) return [];
+            if (!searchUrlRule?.value) return;
 
             let searchUrl = searchUrlRule.value.replace('{{key}}', encodeURIComponent(query));
             searchUrl = new URL(searchUrl, source.baseUrl).toString();
@@ -183,25 +244,22 @@ export const searchWithBookSources = async (
             }
 
             const res = await fetch(searchUrl, {method: 'GET', headers});
-            if (!res.ok) return [];
+            if (!res.ok) return;
             const htmlOrData = await res.text();
 
-            const parsedResults = parseSearchResults(htmlOrData, ruleGroups, source);
-            return parsedResults.map((r, i) => ({
-                ...r,
-                id: `${source.id}-${Date.now()}-${i}`,
-                sourceId: source.id,
-                sourceName: source.name
-            }));
+            for await (const result of parseSearchResults(htmlOrData, ruleGroups, source)) {
+                yield {
+                    ...result,
+                    id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`,
+                    bookSourceId: source.id,
+                    bookSourceName: source.name,
+                    bookSearchSources: []
+                }
+            }
         } catch (e) {
             console.error(`Error fetching source ${source.name}:`, e);
-            return [];
         }
-    });
-
-    const all = await Promise.all(promises);
-    all.forEach(arr => results.push(...arr));
-    return results;
+    }
 };
 
 export default function SearchScreen() {
@@ -211,6 +269,7 @@ export default function SearchScreen() {
     const [error, setError] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const {getAllSources} = useBookSource();
+    const bookStore = useBookStore.getState();
 
     const [sources, setSources] = useState(getAllSources() || []);
 
@@ -224,9 +283,10 @@ export default function SearchScreen() {
         setError(null);
 
         try {
-            const results = await searchWithBookSources(searchQuery, sources);
-            const aggregatedResults = aggregateSearchResults(results);
-            setSearchResults(aggregatedResults);
+            const results = searchWithBookSources(searchQuery, sources);
+            for await (const batch of results) {
+                setSearchResults(prev => aggregateSearchResult(prev, batch));
+            }
         } catch (err) {
             setError('搜索失败，请检查网络连接和书源配置');
             console.error('Search error:', err);
@@ -236,57 +296,76 @@ export default function SearchScreen() {
         }
     };
 
-    // Enhanced aggregate results - remove duplicates based on title and author, but track multiple sources
-    const aggregateSearchResults = (results: SearchResult[]): SearchResult[] => {
-        const uniqueResultsMap = new Map<number, SearchResult & { allSourceIds: number[] }>();
+    /**
+     * 聚合搜索结果。
+     * 如果新结果与现有结果中某项的书名和作者相同，则合并其书源信息；
+     * 否则将新结果添加到现有结果列表。
+     *
+     * @param results 现有的搜索结果列表。
+     * @param result 刚解析出来的搜索结果。
+     * @returns 聚合后的搜索结果列表。
+     */
+    const aggregateSearchResult = (
+        results: SearchResult[],
+        result: SearchResult
+    ): SearchResult[] => {
+        // 查找现有结果是否匹配
+        const existingIndex = results.findIndex(item =>
+            item.title === result.title && item.author === result.author
+        );
 
-        for (const result of results) {
-            // Create a key using title and author to identify duplicates
-            const key = Number(`${result.title.toLowerCase().trim()}-${result.author.toLowerCase().trim()}`);
+        if (existingIndex !== -1) {
+            // 复制原数组，避免直接修改
+            const newResults = [...results];
+            const existingResult = {...newResults[existingIndex]};
 
-            if (!uniqueResultsMap.has(key)) {
-                // If we don't have a result with this key yet, add it with source tracking
-                uniqueResultsMap.set(key, {
-                    ...result,
-                    allSourceIds: [result.sourceId]
-                });
-            } else {
-                // If we already have a result with the same title and author,
-                // add this source to the list of available sources for this book
-                const existingResult = uniqueResultsMap.get(key)!;
+            // 合并书源
+            const existingSources = existingResult.bookSearchSources || [];
+            const newSources = result.bookSearchSources || [];
 
-                // Check if this source is already in the list to avoid duplicates
-                if (!existingResult.allSourceIds.includes(result.sourceId)) {
-                    existingResult.allSourceIds.push(result.sourceId);
+            const mergedSources = [
+                ...existingSources,
+                ...newSources.filter(newSource =>
+                    !existingSources.some(source =>
+                        source.detailUrl === newSource.detailUrl ||
+                        (source.name === newSource.name && source.id === newSource.id)
+                    )
+                )
+            ];
 
-                    // Optionally, if we want to preserve the best cover/image from all sources
-                    // we could implement logic to choose the best cover here
-                }
-            }
+            existingResult.bookSearchSources = mergedSources;
+
+            newResults[existingIndex] = existingResult;
+
+            return newResults;
+        } else {
+            // 未找到匹配项，返回新数组
+            return [...results, result];
         }
-
-        // Convert back to SearchResult array
-        return Array.from(uniqueResultsMap.values()).map(aggregateResult => {
-            const {allSourceIds, ...searchResult} = aggregateResult;
-            return searchResult;
-        });
     };
 
+
     const handleResultPress = (result: SearchResult) => {
-        // Navigate to book detail page
-        router.push({
-            pathname: '/book/book-detail',
-            params: {
+        bookStore.setBook(
+            {
                 id: result.id,
                 title: result.title,
                 author: result.author,
                 coverUrl: result.coverUrl,
                 intro: result.intro,
-                sourceId: result.sourceId,
-                sourceName: result.sourceName,
+                sourceId: result.bookSourceId,
+                sourceName: result.bookSourceName,
                 detailUrl: result.detailUrl,
-                allSourceIds: JSON.stringify(result.sourceId || [result.sourceId])
-            }
+            },
+            {
+                id: result.bookSourceId,
+                name: result.bookSourceName,
+                detailUrl: result.detailUrl,
+            },
+            result.bookSearchSources,
+        );
+        router.push({
+            pathname: '/book/book-detail',
         });
     };
 
@@ -311,9 +390,9 @@ export default function SearchScreen() {
             showBackButton={true}
             headerElement={
                 <View style={styles.searchContainer}>
-                    <Input
+                    <TextInput
                         style={styles.searchInput}
-                        placeholder="搜索书籍..."
+                        placeholder={"输入书名称..."}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
                         onSubmitEditing={handleSearch}
@@ -367,7 +446,7 @@ export default function SearchScreen() {
                                             作者: {item.author}
                                         </Text>
                                         <Text style={styles.resultSource} numberOfLines={1}>
-                                            来源: {item.sourceName}
+                                            来源: {item.bookSourceName}
                                         </Text>
                                         {item.intro && (
                                             <Text style={styles.resultIntro} numberOfLines={2}>

@@ -2,16 +2,20 @@ import React from 'react';
 import {Alert, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {useRouter} from 'expo-router';
 import {Book, useBookshelf} from '@/hooks/use-bookshelf';
+import {useBookStore} from "@/store/bookStore";
+import {BookOpen} from "lucide-react-native";
 
 const {width} = Dimensions.get('window');
 
-export type BookDetailProps = {
-    book: Book;
-};
-
-export default function BookDetailScreen({book}: BookDetailProps) {
+export default function BookDetailScreen() {
     const router = useRouter();
+    const bookStore = useBookStore.getState();
+    const book = bookStore.currentBook as Book;
     const {addBook, hasBook} = useBookshelf();
+
+    if (!book) {
+        return <Text>未选择书籍</Text>;
+    }
 
     const handleAddToBookshelf = async () => {
         if (hasBook(book.id)) {
@@ -34,7 +38,17 @@ export default function BookDetailScreen({book}: BookDetailProps) {
             <ScrollView contentContainerStyle={styles.content}>
                 {/* 封面 + 基本信息 */}
                 <View style={styles.header}>
-                    <Image source={{uri: book.coverUrl ?? ''}} style={styles.cover}/>
+                    {book.coverUrl ? (
+                        <Image
+                            source={{uri: book.coverUrl}}
+                            style={styles.cover}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <View style={styles.resultImagePlaceholder}>
+                            <BookOpen size={32} color="#808080"/>
+                        </View>
+                    )}
                     <View style={styles.info}>
                         <Text style={styles.title}>{book.title}</Text>
                         <Text style={styles.author}>{book.author ?? '未知作者'}</Text>
@@ -57,8 +71,15 @@ export default function BookDetailScreen({book}: BookDetailProps) {
                 {/* 书源信息 */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>书源信息</Text>
-                    <Text style={styles.sectionContent}>默认书源：示例小说网</Text>
-                    <Text style={styles.sectionContent}>其他书源：书源A / 书源B</Text>
+                    <Text style={styles.sectionContent}>来源：{bookStore.currentSource?.name}</Text>
+                    <Text
+                        style={styles.sectionContent}>其他书源：{bookStore.currentSources?.map(item => item.name).join('、')}</Text>
+                </View>
+
+                {/* 目录信息 */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>目录</Text>
+                    <Text style={styles.sectionContent}>来源：{bookStore.currentSource?.name}</Text>
                 </View>
             </ScrollView>
 
@@ -76,10 +97,19 @@ export default function BookDetailScreen({book}: BookDetailProps) {
 }
 
 const styles = StyleSheet.create({
-    container: {flex: 1, backgroundColor: '#fff'},
+    container: {flex: 1, backgroundColor: '#fff', paddingTop: 60},
     content: {paddingBottom: 80, paddingHorizontal: 15, paddingTop: 15},
     header: {flexDirection: 'row', marginBottom: 20},
-    cover: {width: 100, height: 140, borderRadius: 5, marginRight: 15},
+    cover: {width: 100, height: 140, borderRadius: 10, marginRight: 15},
+    resultImagePlaceholder: {
+        width: 100,
+        height: 140,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15
+    },
     info: {flex: 1, justifyContent: 'space-between'},
     title: {fontSize: 20, fontWeight: 'bold', marginBottom: 5},
     author: {fontSize: 14, color: '#666'},
@@ -96,13 +126,25 @@ const styles = StyleSheet.create({
         borderTopColor: '#eee',
         backgroundColor: '#fff',
         paddingVertical: 10,
+        margin: 20,
+        paddingTop: 20,
+        marginBottom: 30
     },
     bottomButton: {
         flex: 1,
-        justifyContent: 'center',
+        justifyContent: 'space-around',
         alignItems: 'center',
+        borderStyle: 'solid',
+        borderRadius: 10,
+        marginRight: 40,
+        backgroundColor: '#f0f0f0',
     },
-    bottomButtonText: {fontSize: 16, color: '#333'},
+    bottomButtonText: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        padding: 10,
+        color: '#333'
+    },
     readButton: {
         backgroundColor: '#007aff',
     },
