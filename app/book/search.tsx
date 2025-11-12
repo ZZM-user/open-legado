@@ -18,30 +18,7 @@ export async function* searchWithBookSources(
 
     for (const source of enabledSources) {
         try {
-            let ruleGroups = source.ruleGroups;
-            if (typeof ruleGroups === 'string') {
-                ruleGroups = JSON.parse(ruleGroups);
-            }
-            const searchUrlRule = ruleGroups.search.find((r: any) => r.key === 'searchUrl');
-            if (!searchUrlRule?.value) return;
-
-            let searchUrl = searchUrlRule.value.replace('{{key}}', encodeURIComponent(query));
-            searchUrl = new URL(searchUrl, source.baseUrl).toString();
-
-            let headers: Record<string, string> = {};
-            const headersRule = ruleGroups.search.find((r: any) => r.key === 'headers');
-            if (headersRule?.value) {
-                try {
-                    headers = JSON.parse(headersRule.value);
-                } catch {
-                }
-            }
-
-            const res = await fetch(searchUrl, {method: 'GET', headers});
-            if (!res.ok) return;
-            const htmlOrData = await res.text();
-
-            for await (const result of createParser(source.ruleType).search(htmlOrData, source)) {
+            for await (const result of createParser(source.ruleType).search(query, source)) {
                 yield {
                     ...result,
                     id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`,

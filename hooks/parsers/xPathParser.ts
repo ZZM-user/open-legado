@@ -2,6 +2,7 @@ import {BookParser, ChapterItem, ParserContext, RawSearchResult} from "@/hooks/p
 import {BookSource} from "@/hooks/use-book-source";
 import {DOMParser} from "@xmldom/xmldom";
 import xpath from "xpath";
+import {ParseBookUtil} from "@/hooks/parsers/util/request";
 
 export class XPathParser implements BookParser {
 
@@ -12,7 +13,7 @@ export class XPathParser implements BookParser {
     }
 
     async* search(
-        htmlOrData: string,
+        query: string,
         source: BookSource
     ): AsyncGenerator<RawSearchResult> {
         try {
@@ -28,6 +29,14 @@ export class XPathParser implements BookParser {
             const introSelector = searchRules.find((r: any) => r.key === 'introSelector')?.value;
             const detailSelector = searchRules.find((r: any) => r.key === 'detailSelector')?.value;
 
+            // 获取搜索 URL
+            const searchUrlRule = searchRules.find(r => r.key === 'searchUrl');
+            if (!searchUrlRule?.value) return;
+
+            let searchUrl = searchUrlRule.value.replace('{{key}}', encodeURIComponent(query));
+            searchUrl = new URL(searchUrl, source.baseUrl).toString();
+
+            let htmlOrData = await ParseBookUtil.getHtml(searchUrl, searchRules);
             htmlOrData = htmlOrData
                 // 1. 替换常见 HTML 实体
                 .replace(/&nbsp;/g, ' ')

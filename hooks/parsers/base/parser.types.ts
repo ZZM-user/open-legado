@@ -35,7 +35,7 @@ export interface ParserContext {
 }
 
 export interface Searchable {
-    search(htmlOrData: string, source: BookSource): AsyncGenerator<RawSearchResult>;
+    search(query: string, source: BookSource): AsyncGenerator<RawSearchResult>;
 }
 
 export interface ChapterListProvider {
@@ -46,10 +46,12 @@ export interface ContentProvider {
     getContent(chapterUrl: string, source: BookSource): AsyncGenerator<string>;
 }
 
+
 export interface BookParser extends Searchable, ChapterListProvider, ContentProvider {
     key: 'xpath' | 'css' | 'jsonpath' | 'regex';
 
     setContext?(context: ParserContext): void;
+
 
 }
 
