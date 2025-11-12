@@ -101,7 +101,7 @@ const RULE_TEMPLATES: Record<RuleGroupKey, RuleTemplate[]> = {
         {key: 'intro', label: '简介规则', placeholder: '.intro'},
         {key: 'cover', label: '封面规则', placeholder: '.cover'},
         {key: 'intro', label: '简介规则', placeholder: '.detail-intro'},
-        {key: 'dir', label: '目录规则', placeholder: '.list > li'},
+        {key: 'chapter', label: '目录规则', placeholder: '.list > li'},
         {key: 'latestChapter', label: '最新章节规则', placeholder: '.list > li'},
         {key: 'updateTime', label: '更新时间规则', placeholder: '.update-time'},
     ],

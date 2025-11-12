@@ -82,12 +82,49 @@ export class XPathParser implements BookParser {
         }
     };
 
-    getChapters(bookDetailUrl: string, source: BookSource): AsyncGenerator<ChapterItem> {
-        throw new Error("Method not implemented.");
+    async* getChapters(bookDetailUrl: string, source: BookSource): AsyncGenerator<ChapterItem> {
+        // {key: 'chapterTitle', label: '章节标题规则', placeholder: 'a'},
+        // {key: 'chapterUrl', label: '章节链接规则', placeholder: 'a::attr(href)'},
+        const chapterListSelector = source.ruleGroups.catalog.find((r: any) => r.key === 'chapterList');
+        if (!chapterListSelector?.value) return [];
+        const chapterTitleSelector = source.ruleGroups.catalog.find((r: any) => r.key === 'chapterTitle');
+        if (!chapterTitleSelector?.value) return [];
+        const chapterUrlSelector = source.ruleGroups.catalog.find((r: any) => r.key === 'chapterUrl');
+        if (!chapterUrlSelector?.value) return [];
+
+        let htmlOrData = await ParseBookUtil.getHtml(bookDetailUrl, source.ruleGroups.catalog);
+        htmlOrData = htmlOrData
+            // 1. 替换常见 HTML 实体
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&copy;/g, '©')
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'");
+
+        const document = new DOMParser({
+            locator: {},
+            errorHandler: {
+                warning: function (w) {
+                },
+                error: function (e) {
+                },
+                fatalError: function (e) {
+                    console.error(e)
+                }
+            }
+        }).parseFromString(htmlOrData);
+
+        const nodes = xpath.select(chapterListSelector.value, document) as Node[];
+        for (const node of nodes) {
+            const title = this.extractValue(chapterTitleSelector.value, node, '');
+            const chapterUrl = this.extractValue(chapterUrlSelector.value, node, '');
+            console.log('chapterUrl', chapterUrl);
+            console.log('title', title);
+            yield {title, chapterUrl};
+        }
     }
 
     getContent(chapterUrl: string, source: BookSource): AsyncGenerator<string> {
-        throw new Error("Method not implemented.");
+        throw new Error(`Method not implemented. ${chapterUrl}`);
     }
 
     extractValue = (

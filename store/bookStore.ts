@@ -1,7 +1,7 @@
 // store/bookStore.ts
 import {create} from 'zustand';
 import {Book} from "@/hooks/use-bookshelf";
-import {BookSearchSource} from "@/app/book/search";
+import {BookSearchSource} from "@/hooks/parsers/base/parser.types";
 
 interface BookStore {
     currentBook?: Book;

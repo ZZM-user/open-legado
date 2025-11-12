@@ -19,6 +19,7 @@ export interface SearchResult extends RawSearchResult {
     bookSourceId?: number;
     bookSourceName: string;
     bookSearchSources: BookSearchSource[];
+    chapters?: ChapterItem[];
 }
 
 export interface ChapterItem {
@@ -48,7 +49,7 @@ export interface ContentProvider {
 
 
 export interface BookParser extends Searchable, ChapterListProvider, ContentProvider {
-    key: 'xpath' | 'css' | 'jsonpath' | 'regex';
+    key: string | 'xpath' | 'css' | 'jsonpath' | 'regex';
 
     setContext?(context: ParserContext): void;
 

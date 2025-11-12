@@ -11,6 +11,7 @@ export type Book = {
     progress: number | null;
     lastReadChapter: string | null;
     groupId: number | null;
+    detailUrl: string | null;
     createdTime: number | null;
     updatedTime: number | null;
 };
@@ -31,7 +32,7 @@ export type BookshelfActions = {
 export type UseBookshelfResult = {
     books: Book[];
     totalBooks: number;
-    hasBook: (bookId: number) => boolean;
+    hasBook: (bookId: string) => boolean;
 } & BookshelfActions;
 
 export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfResult {

@@ -1,9 +1,13 @@
-import React from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {useRouter} from 'expo-router';
 import {Book, useBookshelf} from '@/hooks/use-bookshelf';
 import {useBookStore} from "@/store/bookStore";
 import {BookOpen} from "lucide-react-native";
+import {createParser} from "@/hooks/parsers/base/bookParserFactory";
+import {useBookSource} from "@/hooks/use-book-source";
+import {ChapterItem} from "@/hooks/parsers/base/parser.types";
+import {ChapterView} from "@/components/chapter-view";
 
 const {width} = Dimensions.get('window');
 
@@ -11,7 +15,35 @@ export default function BookDetailScreen() {
     const router = useRouter();
     const bookStore = useBookStore.getState();
     const book = bookStore.currentBook as Book;
+    const bookSource = useBookSource();
+    const currentBookSource = bookSource.getSourceById(bookStore.currentSource?.id);
     const {addBook, hasBook} = useBookshelf();
+    const [chapters, setChapters] = useState<ChapterItem[]>([]);
+
+    const detailUrl = bookStore.currentBook?.detailUrl;
+    const stableSource = useMemo(() => currentBookSource, [currentBookSource?.id]);
+
+    useEffect(() => {
+        if (!stableSource || !detailUrl) return;
+        let cancelled = false;
+
+        const loadChapters = async () => {
+            const chapters: ChapterItem[] = [];
+            const gen = createParser(stableSource.ruleType as any).getChapters(detailUrl, stableSource as any);
+            for await (const ch of gen) {
+                if (cancelled) break;
+                chapters.push(ch);
+            }
+            if (!cancelled) setChapters(chapters);
+        };
+
+        loadChapters();
+
+        return () => {
+            cancelled = true
+        };
+    }, [stableSource, detailUrl]);
+
 
     if (!book) {
         return <Text>未选择书籍</Text>;
@@ -79,7 +111,7 @@ export default function BookDetailScreen() {
                 {/* 目录信息 */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>目录</Text>
-                    <Text style={styles.sectionContent}>来源：{bookStore.currentSource?.name}</Text>
+                    <ChapterView chapters={chapters}/>
                 </View>
             </ScrollView>
 
@@ -114,6 +146,20 @@ const styles = StyleSheet.create({
     title: {fontSize: 20, fontWeight: 'bold', marginBottom: 5},
     author: {fontSize: 14, color: '#666'},
     progress: {fontSize: 14, color: '#999'},
+    chapterList: {
+        flexDirection: 'column',
+    },
+    chapterItem: {
+        height: 40,
+        borderBottomWidth: 1,
+        borderBottomColor: '#eee',
+        justifyContent: 'center',
+        paddingHorizontal: 10,
+    },
+    chapterTitle: {
+        color: '#333',
+        fontSize: 14,
+    },
     section: {marginBottom: 15},
     sectionTitle: {fontSize: 16, fontWeight: 'bold', marginBottom: 5},
     sectionContent: {fontSize: 14, color: '#444', lineHeight: 20},
