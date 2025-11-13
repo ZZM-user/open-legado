@@ -5,7 +5,6 @@ import {Book, useBookshelf} from '@/hooks/use-bookshelf';
 import {useBookStore} from "@/store/bookStore";
 import {BookOpen} from "lucide-react-native";
 import {createParser} from "@/hooks/parsers/base/bookParserFactory";
-import {useBookSource} from "@/hooks/use-book-source";
 import {ChapterItem} from "@/hooks/parsers/base/parser.types";
 import {ChapterView} from "@/components/chapter-view";
 
@@ -15,8 +14,7 @@ export default function BookDetailScreen() {
     const router = useRouter();
     const bookStore = useBookStore.getState();
     const book = bookStore.currentBook as Book;
-    const bookSource = useBookSource();
-    const currentBookSource = bookSource.getSourceById(bookStore.currentSource?.id);
+    const currentBookSource = bookStore.bookOriginalSource;
     const {addBook, hasBook} = useBookshelf();
     const [chapters, setChapters] = useState<ChapterItem[]>([]);
 
@@ -34,7 +32,15 @@ export default function BookDetailScreen() {
                 if (cancelled) break;
                 chapters.push(ch);
             }
-            if (!cancelled) setChapters(chapters);
+            if (!cancelled) {
+                setChapters(chapters);
+                if (chapters.length > 0) {
+                    bookStore.updateCurrentChapter({
+                        title: chapters[0].title,
+                        chapterUrl: chapters[0].chapterUrl,
+                    })
+                }
+            }
         };
 
         loadChapters();
@@ -60,8 +66,7 @@ export default function BookDetailScreen() {
 
     const handleReadNow = () => {
         router.push({
-            pathname: '/book/read/[id]',
-            params: {id: book.id}
+            pathname: '/book/read'
         });
     };
 
@@ -111,7 +116,12 @@ export default function BookDetailScreen() {
                 {/* 目录信息 */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>目录</Text>
-                    <ChapterView chapters={chapters}/>
+                    <ChapterView chapters={chapters} onClick={chapter => {
+                        bookStore.updateCurrentChapter(chapter);
+                        router.push({
+                            pathname: '/book/read'
+                        });
+                    }}/>
                 </View>
             </ScrollView>
 

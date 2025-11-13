@@ -1,6 +1,7 @@
-import { Book, useBookshelf } from '@/hooks/use-bookshelf';
-import { forwardRef, useImperativeHandle } from 'react';
-import { FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {Book, useBookshelf} from '@/hooks/use-bookshelf';
+import {forwardRef, useImperativeHandle} from 'react';
+import {FlatList, Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {BookOpen} from "lucide-react-native";
 
 export type BookShelfHandle = {
     addBook: (book: Book) => void;
@@ -18,10 +19,10 @@ export type BookShelfProps = {
 };
 
 const BookShelf = forwardRef<BookShelfHandle, BookShelfProps>(function BookShelf(
-    { initialBooks, onBookPress },
+    {initialBooks, onBookPress},
     ref,
 ) {
-    const { books, addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook } = useBookshelf({ initialBooks });
+    const {books, addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook} = useBookshelf({initialBooks});
 
     useImperativeHandle(
         ref,
@@ -32,15 +33,24 @@ const BookShelf = forwardRef<BookShelfHandle, BookShelfProps>(function BookShelf
             clearBooks,
             replaceBooks,
             hasBook,
-            getBooks: () => books,
         }),
-        [addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook, books],
+        [addBook, upsertBook, removeBook, clearBooks, replaceBooks, hasBook],
     );
 
-    const renderBookItem = ({ item }: { item: Book }) => (
+    const renderBookItem = ({item}: { item: Book }) => (
         <TouchableOpacity onPress={() => onBookPress?.(item)} activeOpacity={0.7}>
             <View style={styles.bookItem}>
-                <Image source={{ uri: item.coverUrl }} style={styles.bookCover} />
+                {item.coverUrl ? (
+                    <Image
+                        source={{uri: item.coverUrl}}
+                        style={styles.bookCover}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={styles.resultImagePlaceholder}>
+                        <BookOpen size={32} color="#808080"/>
+                    </View>
+                )}
                 <View style={styles.bookInfo}>
                     <Text style={styles.bookTitle}>{item.title}</Text>
                     <Text style={styles.bookAuthor}>{item.author}</Text>
@@ -87,8 +97,8 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderRadius: 8,
-        alignItems: 'center',
         padding: 1,
+        paddingTop: 6
     },
     bookCover: {
         width: 60,
@@ -96,21 +106,31 @@ const styles = StyleSheet.create({
         borderRadius: 4,
         marginRight: 12,
     },
+    resultImagePlaceholder: {
+        width: 90,
+        height: 120,
+        backgroundColor: '#f0f0f0',
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 15
+    },
     bookInfo: {
         flex: 1,
+        paddingTop: 10
     },
     bookTitle: {
-        fontSize: 14,
+        fontSize: 18,
         fontWeight: 'bold',
         marginBottom: 4,
     },
     bookAuthor: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#888',
         marginBottom: 4,
     },
     lastRead: {
-        fontSize: 12,
+        fontSize: 14,
         color: '#aaa',
         marginBottom: 6,
     },
@@ -143,3 +163,8 @@ const styles = StyleSheet.create({
         gap: 8,
     }
 });
+
+function getBooks(): Book[] {
+    throw new Error("Function not implemented.");
+}
+

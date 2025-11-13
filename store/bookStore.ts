@@ -1,15 +1,31 @@
 // store/bookStore.ts
 import {create} from 'zustand';
 import {Book} from "@/hooks/use-bookshelf";
-import {BookSearchSource} from "@/hooks/parsers/base/parser.types";
+import {BookSearchSource, ChapterItem} from "@/hooks/parsers/base/parser.types";
+import {BookSource} from "@/hooks/use-book-source";
 
 interface BookStore {
     currentBook?: Book;
     currentSource?: BookSearchSource;
     currentSources?: BookSearchSource[];
-    setBook: (book: Book, currentSource: BookSearchSource, sources: BookSearchSource[]) => void;
+    bookOriginalSource?: BookSource;
+    currentChapter?: ChapterItem;
+    setBook: (book: Book, currentSource: BookSearchSource, bookOriginalSource: BookSource, sources: BookSearchSource[]) => void;
+    updateCurrentChapter: (chapter: ChapterItem) => void;
 }
 
 export const useBookStore = create<BookStore>((set) => ({
-    setBook: (book, cSource, sources) => set({currentBook: book, currentSource: cSource, currentSources: sources}),
+    setBook: (book, searchSource, bookOriginalSource, sources) => {
+        set({
+            currentBook: book,
+            currentSource: searchSource,
+            bookOriginalSource: bookOriginalSource,
+            currentSources: sources
+        })
+    },
+    updateCurrentChapter: (chapter: ChapterItem) => {
+        set({
+            currentChapter: chapter
+        })
+    }
 }));

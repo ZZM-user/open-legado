@@ -24,6 +24,7 @@ export async function* searchWithBookSources(
                     id: `${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 10)}`,
                     bookSourceId: source.id,
                     bookSourceName: source.name,
+                    bookOriginalSource: source,
                     bookSearchSources: []
                 }
             }
@@ -39,10 +40,10 @@ export default function SearchScreen() {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
-    const {getAllSources} = useBookSource();
+    const usebookSource = useBookSource();
     const bookStore = useBookStore.getState();
 
-    const [sources, setSources] = useState(getAllSources() || []);
+    const [sources, setSources] = useState(usebookSource.getAllSources() || []);
 
     const handleSearch = async () => {
         if (!searchQuery.trim()) {
@@ -133,6 +134,7 @@ export default function SearchScreen() {
                 name: result.bookSourceName,
                 detailUrl: result.detailUrl,
             },
+            result.bookOriginalSource,
             result.bookSearchSources,
         );
         router.push({

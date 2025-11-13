@@ -21,6 +21,7 @@ export type UseBookshelfOptions = {
 };
 
 export type BookshelfActions = {
+    getBooks: () => Book[];
     addBook: (book: Book) => Promise<void>;
     removeBook: (bookId: number) => Promise<void>;
     clearBooks: () => Promise<void>;
@@ -41,7 +42,7 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
     // 初始加载
     useEffect(() => {
         (async () => {
-            const dbBooks = await db.select().from(booksTable);
+            const dbBooks = await getBooks();
             setBooks(dbBooks);
         })();
     }, []);
@@ -50,6 +51,11 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
     const hasBook = useCallback((bookId: string) => books.some((b) => b.id === bookId), [books]);
 
     const totalBooks = useMemo(() => books.length, [books]);
+
+    // 获取全部
+    const getBooks = useCallback(async () => {
+        return db.select().from(booksTable);
+    }, []);
 
     // 添加或更新
     const upsertBook = useCallback(async (book: Book) => {

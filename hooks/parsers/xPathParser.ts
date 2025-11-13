@@ -1,5 +1,5 @@
 import {BookParser, ChapterItem, ParserContext, RawSearchResult} from "@/hooks/parsers/base/parser.types";
-import {BookSource} from "@/hooks/use-book-source";
+import {BookSource, BookSourceRule} from "@/hooks/use-book-source";
 import {DOMParser} from "@xmldom/xmldom";
 import xpath from "xpath";
 import {ParseBookUtil} from "@/hooks/parsers/util/request";
@@ -36,28 +36,7 @@ export class XPathParser implements BookParser {
             let searchUrl = searchUrlRule.value.replace('{{key}}', encodeURIComponent(query));
             searchUrl = new URL(searchUrl, source.baseUrl).toString();
 
-            let htmlOrData = await ParseBookUtil.getHtml(searchUrl, searchRules);
-            htmlOrData = htmlOrData
-                // 1. 替换常见 HTML 实体
-                .replace(/&nbsp;/g, ' ')
-                .replace(/&copy;/g, '©')
-                .replace(/&quot;/g, '"')
-                .replace(/&apos;/g, "'")
-                // 2. 移除或简化 DTD 声明（xmldom 严格性来源）
-                // 替换 <!DOCTYPE ... > 为空字符串或简单的 <!DOCTYPE html>
-                .replace(/<!DOCTYPE[^>]*>/i, '<!DOCTYPE html>')
-            const document = new DOMParser({
-                locator: {},
-                errorHandler: {
-                    warning: function (w) {
-                    },
-                    error: function (e) {
-                    },
-                    fatalError: function (e) {
-                        console.error(e)
-                    }
-                }
-            }).parseFromString(htmlOrData);
+            const document = await this.getHtmlData(searchUrl, searchRules);
             const nodes = xpath.select(itemSelectorRule.value, document) as Node[];
             for (const node of nodes) {
                 // 1. 提取 Title (String value)
@@ -93,15 +72,40 @@ export class XPathParser implements BookParser {
         const chapterUrlSelector = source.ruleGroups.catalog.find((r: any) => r.key === 'chapterUrl');
         if (!chapterUrlSelector?.value) return [];
 
-        let htmlOrData = await ParseBookUtil.getHtml(bookDetailUrl, source.ruleGroups.catalog);
+        const document = await this.getHtmlData(bookDetailUrl, source.ruleGroups.catalog);
+
+        const nodes = xpath.select(chapterListSelector.value, document) as Node[];
+        for (const node of nodes) {
+            const title = this.extractValue(chapterTitleSelector.value, node, '');
+            let chapterUrl = this.extractValue(chapterUrlSelector.value, node, '');
+            if (chapterUrl.startsWith('/')) {
+                chapterUrl = new URL(chapterUrl, bookDetailUrl).toString();
+            }
+            console.log(`${bookDetailUrl}:${title}- ${chapterUrl}`);
+            yield {title, chapterUrl};
+        }
+    }
+
+    async* getContent(chapterUrl: string, source: BookSource): AsyncGenerator<string> {
+        console.log(`getContent ${chapterUrl}`);
+        const contentSelector = source.ruleGroups.content.find((r: any) => r.key === 'content');
+        if (!contentSelector?.value) return [];
+
+        const document = await this.getHtmlData(chapterUrl, source.ruleGroups.content);
+        yield this.extractContent(contentSelector.value, document, '');
+    }
+
+    async getHtmlData(url: string, rule: BookSourceRule[]) {
+        let htmlOrData = await ParseBookUtil.getHtml(url, rule);
         htmlOrData = htmlOrData
             // 1. 替换常见 HTML 实体
             .replace(/&nbsp;/g, ' ')
             .replace(/&copy;/g, '©')
             .replace(/&quot;/g, '"')
-            .replace(/&apos;/g, "'");
+            .replace(/&apos;/g, "'")
+            .replace(/<!DOCTYPE[^>]*>/i, '<!DOCTYPE html>');
 
-        const document = new DOMParser({
+        return new DOMParser({
             locator: {},
             errorHandler: {
                 warning: function (w) {
@@ -113,24 +117,13 @@ export class XPathParser implements BookParser {
                 }
             }
         }).parseFromString(htmlOrData);
-
-        const nodes = xpath.select(chapterListSelector.value, document) as Node[];
-        for (const node of nodes) {
-            const title = this.extractValue(chapterTitleSelector.value, node, '');
-            const chapterUrl = this.extractValue(chapterUrlSelector.value, node, '');
-            console.log(`${bookDetailUrl}:${title}- ${chapterUrl}`);
-            yield {title, chapterUrl};
-        }
-    }
-
-    getContent(chapterUrl: string, source: BookSource): AsyncGenerator<string> {
-        throw new Error(`Method not implemented. ${chapterUrl}`);
     }
 
     extractValue = (
         selector: string | undefined,
         contextNode: Node,
-        defaultValue: string = ''
+        defaultValue: string = '',
+        fullSelector: boolean = false
     ): string => {
         // 检查选择器是否存在
         if (!selector) {
@@ -139,7 +132,10 @@ export class XPathParser implements BookParser {
 
         try {
             // 执行 XPath 选择，使用双重断言处理类型问题
-            const results = xpath.select(`./${selector}`, contextNode) as unknown as string[];
+            if (!fullSelector) {
+                selector = `./${selector}`
+            }
+            const results = xpath.select(selector, contextNode) as unknown as string[];
 
             // 1. 检查结果是否为空数组
             if (!results || results.length === 0) {
@@ -149,8 +145,6 @@ export class XPathParser implements BookParser {
 
             let rawValue: string | null = results[0];
 
-            // 2. 检查结果类型：如果 XPath 选择了 text() 或 @attribute，结果可能是字符串或 Node。
-            // 如果是 Node，需要提取其文本内容。
             if (typeof rawValue === 'object' && rawValue !== null && 'textContent' in rawValue) {
                 // 假设它是一个 Node 对象
                 rawValue = (rawValue as Node).textContent;
@@ -172,5 +166,32 @@ export class XPathParser implements BookParser {
             return defaultValue;
         }
     };
+
+    extractContent = (
+        selector: string | undefined,
+        contextNode: Node,
+        defaultValue: string = ''
+    ): string => {
+        if (!selector) return defaultValue;
+
+        try {
+            const results = xpath.select(selector, contextNode) as Node[];
+
+            if (!results || results.length === 0) {
+                console.warn(`XPath extraction failed: No match found for selector: ${selector}`);
+                return defaultValue;
+            }
+
+            const texts = results
+                .map(p => p.textContent?.trim())
+                .filter(Boolean);
+
+            return texts.join('\n\n'); // 保留段落结构
+        } catch (error) {
+            console.warn(`XPath extraction failed for selector: ${selector}`, error);
+            return defaultValue;
+        }
+    };
+
 
 }

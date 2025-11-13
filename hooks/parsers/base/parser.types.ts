@@ -19,6 +19,7 @@ export interface SearchResult extends RawSearchResult {
     bookSourceId?: number;
     bookSourceName: string;
     bookSearchSources: BookSearchSource[];
+    bookOriginalSource: BookSource;
     chapters?: ChapterItem[];
 }
 

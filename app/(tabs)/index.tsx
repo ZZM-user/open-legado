@@ -3,8 +3,11 @@ import ParallaxScrollView from '@/components/parallax-scroll-view';
 import {Search} from "lucide-react-native";
 import {StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {router} from 'expo-router';
+import {useBookStore} from "@/store/bookStore";
 
 export default function HomeScreen() {
+    const bookStore = useBookStore();
+
     const handleSearchPress = () => {
         router.push('/book/search');
     };
@@ -28,9 +31,27 @@ export default function HomeScreen() {
             }
         >
             <BookShelf onBookPress={(book) => {
+                // TODO 跳转到阅读页面
+                // bookStore.setBook(
+                //     {
+                //         id: book.id,
+                //         title: book.title,
+                //         author: book.author,
+                //         coverUrl: book.coverUrl,
+                //         sourceId: book.bookSourceId,
+                //         sourceName: book.bookSourceName,
+                //         detailUrl: result.detailUrl,
+                //     },
+                //     {
+                //         id: result.bookSourceId,
+                //         name: result.bookSourceName,
+                //         detailUrl: result.detailUrl,
+                //     },
+                //     result.bookOriginalSource,
+                //     result.bookSearchSources,
+                // );
                 router.push({
-                    pathname: '/book/read/[id]',
-                    params: {id: book.id}
+                    pathname: '/book/read',
                 });
             }}/>
         </ParallaxScrollView>

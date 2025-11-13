@@ -2,7 +2,12 @@ import {useState} from 'react';
 import {Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {ChapterItem} from "@/hooks/parsers/base/parser.types";
 
-export const ChapterView = ({chapters = []}: { chapters?: ChapterItem[] }) => {
+type ChapterViewProps = {
+    onClick: (chapter: ChapterItem) => void;
+    chapters?: ChapterItem[];
+};
+
+export const ChapterView = ({onClick, chapters = []}: ChapterViewProps) => {
     const [modalVisible, setModalVisible] = useState(false);
 
     const hasChapter = chapters.length > 0;
@@ -52,6 +57,7 @@ export const ChapterView = ({chapters = []}: { chapters?: ChapterItem[] }) => {
                                 onPress={() => {
                                     console.log('点击章节', chapter.title);
                                     setModalVisible(false);
+                                    onClick(chapter);
                                 }}
                             >
                                 <Text style={styles.chapterTitle}>{chapter.title}</Text>
