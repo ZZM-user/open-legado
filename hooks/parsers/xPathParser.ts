@@ -83,6 +83,7 @@ export class XPathParser implements BookParser {
     };
 
     async* getChapters(bookDetailUrl: string, source: BookSource): AsyncGenerator<ChapterItem> {
+        console.log(`getChapters: ${bookDetailUrl}`);
         // {key: 'chapterTitle', label: '章节标题规则', placeholder: 'a'},
         // {key: 'chapterUrl', label: '章节链接规则', placeholder: 'a::attr(href)'},
         const chapterListSelector = source.ruleGroups.catalog.find((r: any) => r.key === 'chapterList');
@@ -117,8 +118,7 @@ export class XPathParser implements BookParser {
         for (const node of nodes) {
             const title = this.extractValue(chapterTitleSelector.value, node, '');
             const chapterUrl = this.extractValue(chapterUrlSelector.value, node, '');
-            console.log('chapterUrl', chapterUrl);
-            console.log('title', title);
+            console.log(`${bookDetailUrl}:${title}- ${chapterUrl}`);
             yield {title, chapterUrl};
         }
     }

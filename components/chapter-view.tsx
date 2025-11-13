@@ -5,6 +5,8 @@ import {ChapterItem} from "@/hooks/parsers/base/parser.types";
 export const ChapterView = ({chapters = []}: { chapters?: ChapterItem[] }) => {
     const [modalVisible, setModalVisible] = useState(false);
 
+    const hasChapter = chapters.length > 0;
+
     return <>
         <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8}}>
             {/* 第一章节标题 */}
@@ -13,7 +15,7 @@ export const ChapterView = ({chapters = []}: { chapters?: ChapterItem[] }) => {
                 numberOfLines={1}          // 超长省略
                 ellipsizeMode="tail"
             >
-                {chapters[0].title}
+                <Text>{hasChapter ? chapters[0].title : '暂无目录信息'}</Text>
             </Text>
 
             {/* 查看全部目录按钮 */}
