@@ -1,4 +1,5 @@
-import {index, integer, primaryKey, real, sqliteTable, text} from 'drizzle-orm/sqlite-core';
+import {index, integer, primaryKey, sqliteTable, text} from 'drizzle-orm/sqlite-core';
+import {InferSelectModel} from "drizzle-orm";
 
 // 书架分组
 export const bookshelfGroups = sqliteTable('bookshelf_groups', {
@@ -20,8 +21,9 @@ export const books = sqliteTable('books', {
     title: text('title').notNull(),
     author: text('author'),
     coverUrl: text('cover_url'),
-    progress: real('progress').default(0),
-    lastReadChapter: text('last_read_chapter'),
+    intro: text('intro'),
+    detailUrl: text('detail_url'),
+    bookSourceId: integer('book_source_id').references(() => bookSources.id),
     groupId: integer('group_id').references(() => bookshelfGroups.id),
     createdTime: integer('created_time').default(Date.now()),
     updatedTime: integer('updated_time').default(Date.now()),
@@ -29,7 +31,21 @@ export const books = sqliteTable('books', {
     idIndex: index('idx_books_id').on(table.id),
     titleIndex: index('idx_books_title').on(table.title),
     groupIdIndex: index('idx_books_group_id').on(table.groupId),
+    bookSourceIdIndex: index('idx_books_book_source_id').on(table.bookSourceId),
 }));
+
+export const readingProgress = sqliteTable('reading_progress', {
+    id: integer('id').primaryKey({autoIncrement: true}),
+    bookId: text('book_id').references(() => books.id),
+    chapterName: text('chapter_name'),
+    chapterIndex: integer('chapter_index'),
+    chapterUrl: text('chapter_url'),
+    chapterProgress: integer('chapter_progress'),
+    createdTime: integer('created_time').default(Date.now()),
+}, (table) => ({
+    idIndex: index('idx_reading_progress_id').on(table.id),
+    bookIdIndex: index('idx_reading_progress_book_id').on(table.bookId),
+}))
 
 // 每一个书源站点（主表）
 export const bookSources = sqliteTable('book_sources', {
@@ -51,3 +67,13 @@ export const bookSources = sqliteTable('book_sources', {
     idIndex: index('idx_book_source_id').on(t.id),
     updatedTimeIndex: index('idx_book_source_updated_time').on(t.updatedTime),
 }));
+
+
+type DbBookRecord = InferSelectModel<typeof books>;
+export type Book = DbBookRecord & {};
+
+type DbBookSourcesRecord = InferSelectModel<typeof bookSources>;
+export type BookSources = DbBookSourcesRecord & {};
+
+type DbBookReadingProcessRecord = InferSelectModel<typeof readingProgress>;
+export type BookReadingProcess = DbBookReadingProcessRecord & {};

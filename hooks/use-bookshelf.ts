@@ -1,33 +1,21 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {db} from '@/db/drizzle';
 import {eq} from 'drizzle-orm';
-import {books as booksTable} from '@/db/schema';
+import {Book, books as booksTable} from '@/db/schema';
 
-export type Book = {
-    id: string;
-    title: string;
-    author: string | null;
-    coverUrl: string | null;
-    progress: number | null;
-    lastReadChapter: string | null;
-    groupId: number | null;
-    detailUrl: string | null;
-    createdTime: number | null;
-    updatedTime: number | null;
-};
 
 export type UseBookshelfOptions = {
     initialBooks?: Book[]; // 可选预加载
 };
 
 export type BookshelfActions = {
-    getBooks: () => Book[];
+    getBooks: () => Promise<Book[]>;
     addBook: (book: Book) => Promise<void>;
-    removeBook: (bookId: number) => Promise<void>;
+    removeBook: (bookId: string) => Promise<void>;
     clearBooks: () => Promise<void>;
     replaceBooks: (books: Book[]) => Promise<void>;
     upsertBook: (book: Book) => Promise<void>;
-    getBookById: (bookId: number) => Book | null;
+    getBookById: (bookId: string) => Promise<Book | null>;
 };
 
 export type UseBookshelfResult = {
@@ -38,14 +26,38 @@ export type UseBookshelfResult = {
 
 export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfResult {
     const [books, setBooks] = useState<Book[]>(options.initialBooks ?? []);
+    const [isLoading, setIsLoading] = useState(true);
 
-    // 初始加载
+    // 1. 初始加载 (只在挂载时执行一次)
     useEffect(() => {
-        (async () => {
-            const dbBooks = await getBooks();
-            setBooks(dbBooks);
-        })();
-    }, []);
+        let isMounted = true; // 用于处理组件卸载后的状态更新
+
+        const loadInitialBooks = async () => {
+            try {
+                // 如果传入了 initialBooks，则跳过初始加载，但这里逻辑是覆盖初始值
+                // 所以我们总是加载
+                setIsLoading(true);
+                const dbBooks = await getBooks();
+
+                if (isMounted) {
+                    setBooks(dbBooks);
+                }
+            } catch (error) {
+                console.error("Failed to load books:", error);
+            } finally {
+                if (isMounted) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadInitialBooks();
+
+        // 清理函数: 在组件卸载时将 isMounted 设为 false，防止内存泄漏
+        return () => {
+            isMounted = false;
+        };
+    }, []); // 仅在挂载时运行
 
     // 是否存在
     const hasBook = useCallback((bookId: string) => books.some((b) => b.id === bookId), [books]);
@@ -71,21 +83,25 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         setBooks(dbBooks);
     }, []);
 
+    // 添加
     const addBook = useCallback(async (book: Book) => {
         await upsertBook(book);
     }, [upsertBook]);
 
+    // 删除
     const removeBook = useCallback(async (bookId: string) => {
         await db.delete(booksTable).where(eq(booksTable.id, bookId));
         const dbBooks = await db.select().from(booksTable);
         setBooks(dbBooks);
     }, []);
 
+    // 清空
     const clearBooks = useCallback(async () => {
         await db.delete(booksTable);
         setBooks([]);
     }, []);
 
+    // 替换
     const replaceBooks = useCallback(async (nextBooks: Book[]) => {
         await db.delete(booksTable); // 清空
         if (nextBooks.length > 0) {
@@ -94,19 +110,21 @@ export function useBookshelf(options: UseBookshelfOptions = {}): UseBookshelfRes
         setBooks(nextBooks);
     }, []);
 
-    const getBookById = (bookId: string): Book | null => {
+    // 获取
+    const getBookById = useCallback(async (bookId: string): Promise<Book | null> => {
         return db.select().from(booksTable).where(eq(booksTable.id, bookId)).get() || null;
-    };
+    }, []);
 
     return {
         books,
         totalBooks,
         hasBook,
+        getBooks,
         addBook,
         removeBook,
         clearBooks,
         replaceBooks,
         upsertBook,
-        getBookById
+        getBookById,
     };
 }

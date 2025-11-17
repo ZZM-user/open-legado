@@ -16,9 +16,14 @@ export default function TabLayout() {
                 headerShown: false,
                 tabBarButton: HapticTab,
                 tabBarStyle: {
-                    height: 70,
-                    paddingBottom: 8,
+                    height: 90,
+                    paddingBottom: 10,
                     paddingTop: 8,
+                    // ⭐️ 核心解决 iOS 边线问题
+                    borderTopWidth: 0,
+                    // ⭐️ 解决 Android 阴影（或边线）问题
+                    elevation: 0,
+                    shadowOpacity: 0,  // 针对某些安卓设备可能存在的阴影
                 },
             }}>
 

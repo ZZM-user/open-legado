@@ -1,12 +1,14 @@
 import React, {useEffect, useMemo, useState} from 'react';
 import {Alert, Dimensions, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
 import {useRouter} from 'expo-router';
-import {Book, useBookshelf} from '@/hooks/use-bookshelf';
 import {useBookStore} from "@/store/bookStore";
 import {BookOpen} from "lucide-react-native";
 import {createParser} from "@/hooks/parsers/base/bookParserFactory";
 import {ChapterItem} from "@/hooks/parsers/base/parser.types";
 import {ChapterView} from "@/components/chapter-view";
+import {Book} from "@/db/schema";
+import {useBookshelf} from "@/hooks/use-bookshelf";
+import SafeAreaContainer from "@/components/safe-container";
 
 const {width} = Dimensions.get('window');
 
@@ -71,75 +73,77 @@ export default function BookDetailScreen() {
     };
 
     return (
-        <View style={styles.container}>
-            <ScrollView contentContainerStyle={styles.content}>
-                {/* 封面 + 基本信息 */}
-                <View style={styles.header}>
-                    {book.coverUrl ? (
-                        <Image
-                            source={{uri: book.coverUrl}}
-                            style={styles.cover}
-                            resizeMode="cover"
-                        />
-                    ) : (
-                        <View style={styles.resultImagePlaceholder}>
-                            <BookOpen size={32} color="#808080"/>
+        <SafeAreaContainer bottom={false}>
+            <View style={styles.container}>
+                <ScrollView contentContainerStyle={styles.content}>
+                    {/* 封面 + 基本信息 */}
+                    <View style={styles.header}>
+                        {book.coverUrl ? (
+                            <Image
+                                source={{uri: book.coverUrl}}
+                                style={styles.cover}
+                                resizeMode="cover"
+                            />
+                        ) : (
+                            <View style={styles.resultImagePlaceholder}>
+                                <BookOpen size={32} color="#808080"/>
+                            </View>
+                        )}
+                        <View style={styles.info}>
+                            <Text style={styles.title}>{book.title}</Text>
+                            <Text style={styles.author}>{book.author ?? '未知作者'}</Text>
+                            <Text style={styles.progress}>
+                                阅读进度: {book.progress ?? 0}%
+                            </Text>
                         </View>
-                    )}
-                    <View style={styles.info}>
-                        <Text style={styles.title}>{book.title}</Text>
-                        <Text style={styles.author}>{book.author ?? '未知作者'}</Text>
-                        <Text style={styles.progress}>
-                            阅读进度: {book.progress ?? 0}%
+                    </View>
+
+                    {/* 简介 */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>简介</Text>
+                        <Text style={styles.sectionContent}>
+                            {book.lastReadChapter
+                                ? `上次阅读章节：${book.lastReadChapter}`
+                                : '暂无简介'}
                         </Text>
                     </View>
-                </View>
 
-                {/* 简介 */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>简介</Text>
-                    <Text style={styles.sectionContent}>
-                        {book.lastReadChapter
-                            ? `上次阅读章节：${book.lastReadChapter}`
-                            : '暂无简介'}
-                    </Text>
-                </View>
+                    {/* 书源信息 */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>书源信息</Text>
+                        <Text style={styles.sectionContent}>来源：{bookStore.currentSource?.name}</Text>
+                        <Text
+                            style={styles.sectionContent}>其他书源：{bookStore.currentSources?.map(item => item.name).join('、')}</Text>
+                    </View>
 
-                {/* 书源信息 */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>书源信息</Text>
-                    <Text style={styles.sectionContent}>来源：{bookStore.currentSource?.name}</Text>
-                    <Text
-                        style={styles.sectionContent}>其他书源：{bookStore.currentSources?.map(item => item.name).join('、')}</Text>
-                </View>
+                    {/* 目录信息 */}
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>目录</Text>
+                        <ChapterView chapters={chapters} onClick={chapter => {
+                            bookStore.updateCurrentChapter(chapter);
+                            router.push({
+                                pathname: '/book/read'
+                            });
+                        }}/>
+                    </View>
+                </ScrollView>
 
-                {/* 目录信息 */}
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>目录</Text>
-                    <ChapterView chapters={chapters} onClick={chapter => {
-                        bookStore.updateCurrentChapter(chapter);
-                        router.push({
-                            pathname: '/book/read'
-                        });
-                    }}/>
+                {/* 底部操作栏 */}
+                <View style={styles.bottomBar}>
+                    <TouchableOpacity style={styles.bottomButton} onPress={handleAddToBookshelf}>
+                        <Text style={styles.bottomButtonText}>加入书架</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.bottomButton, styles.readButton]} onPress={handleReadNow}>
+                        <Text style={[styles.bottomButtonText, {color: '#fff'}]}>立即阅读</Text>
+                    </TouchableOpacity>
                 </View>
-            </ScrollView>
-
-            {/* 底部操作栏 */}
-            <View style={styles.bottomBar}>
-                <TouchableOpacity style={styles.bottomButton} onPress={handleAddToBookshelf}>
-                    <Text style={styles.bottomButtonText}>加入书架</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.bottomButton, styles.readButton]} onPress={handleReadNow}>
-                    <Text style={[styles.bottomButtonText, {color: '#fff'}]}>立即阅读</Text>
-                </TouchableOpacity>
             </View>
-        </View>
+        </SafeAreaContainer>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {flex: 1, backgroundColor: '#fff', paddingTop: 60},
+    container: {flex: 1, backgroundColor: '#fff'},
     content: {paddingBottom: 80, paddingHorizontal: 15, paddingTop: 15},
     header: {flexDirection: 'row', marginBottom: 20},
     cover: {width: 100, height: 140, borderRadius: 10, marginRight: 15},

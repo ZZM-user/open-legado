@@ -7,7 +7,6 @@ import {
     Platform,
     Pressable,
     ScrollView,
-    StatusBar,
     StyleSheet,
     Text,
     TouchableOpacity,
@@ -16,11 +15,14 @@ import {
 import {Ionicons} from '@expo/vector-icons';
 import {themeColors, useReaderStore} from '@/store/useReaderStore';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {StatusBar} from "expo-status-bar";
+import {useRouter} from "expo-router";
 
 const {height: SCREEN_HEIGHT} = Dimensions.get('window');
 
 export default function ReaderScreen() {
     const insets = useSafeAreaInsets();
+    const router = useRouter();
 
     const {
         isMenuVisible,
@@ -74,7 +76,9 @@ export default function ReaderScreen() {
             ]}
             pointerEvents={isMenuVisible ? "auto" : "none"} // 隐藏时禁止点击，防止误触
         >
-            <TouchableOpacity style={styles.iconBtn} onPress={() => console.log('Back')}>
+            <TouchableOpacity style={styles.iconBtn} onPress={() => {
+                router.back();
+            }}>
                 <Ionicons name="chevron-back" size={26} color={colors.menuText}/>
             </TouchableOpacity>
             <Text style={[styles.barTitle, {color: colors.menuText}]} numberOfLines={1}>

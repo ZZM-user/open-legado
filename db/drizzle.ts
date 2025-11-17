@@ -3,3 +3,4 @@ import * as SQLite from 'expo-sqlite';
 
 const expo = SQLite.openDatabaseSync('app.db');
 export const db = drizzle(expo);
+// npx drizzle-kit generate
