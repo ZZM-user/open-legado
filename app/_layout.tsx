@@ -8,6 +8,8 @@ import {initialWindowMetrics, SafeAreaProvider} from "react-native-safe-area-con
 import {useMigrations} from "drizzle-orm/expo-sqlite/migrator";
 import migrations from "@/drizzle/migrations";
 import {db} from "@/db/drizzle";
+import {useEffect} from "react";
+import {Text, View} from "react-native";
 
 export const unstable_settings = {
     anchor: '(tabs)',
@@ -15,7 +17,29 @@ export const unstable_settings = {
 
 export default function RootLayout() {
     const colorScheme = useColorScheme();
-    useMigrations(db, migrations);
+    const {success, error} = useMigrations(db, migrations);
+
+    useEffect(() => {
+        if (error) {
+            console.error("Migration error: ", error);
+        }
+    }, [error]);
+
+    if (error) {
+        return (
+            <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                <Text>Migration error: {error.message}</Text>
+            </View>
+        )
+    }
+    if (!success) {
+        return (
+            <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
+                <Text>Migrations are in progress...</Text>
+            </View>
+        )
+    }
+
 
     return (
         <SafeAreaProvider initialMetrics={initialWindowMetrics}>
