@@ -3,7 +3,7 @@ const demoSource =
         "id": 5,
         "name": "第一版主网",
         "baseUrl": "https://www.bzbz1024.com/",
-        "headers": null,
+        "headers": {"user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36 Edg/142.0.0.0"},
         "enabled": true,
         "ruleType": "xpath",
         "ruleGroups": {

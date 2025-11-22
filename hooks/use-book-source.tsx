@@ -1,6 +1,7 @@
 import {db} from "@/db/drizzle";
 import {bookSources} from "@/db/schema";
 import {eq} from "drizzle-orm";
+import demoSource from "@/app/book-source/demo-source";
 
 export type RuleType = 'css' | 'xpath' | 'jsonpath' | 'regex';
 
@@ -213,7 +214,10 @@ export function useBookSource() {
     };
 
     const getAllSources = () => {
-        const result = db.select().from(bookSources).all();
+        let result = db.select().from(bookSources).all();
+        if (result.length === 0) {
+            return [demoSource]
+        }
         return result.map((item) => ({
             ...item,
             enabled: item.enabled === 1,

@@ -4,9 +4,9 @@ export class ParseBookUtil {
 
     /**
      * 获取 HTML 内容
-     * @param query 搜索关键字
-     * @param source 数据源
      * @returns HTML 字符串或 undefined
+     * @param url
+     * @param rule
      */
     static async getHtml(url: string, rule: BookSourceRule[]): Promise<string> {
         // 获取 headers
@@ -27,7 +27,6 @@ export class ParseBookUtil {
                 console.error('Fetch error:', res.statusText);
                 return ''
             }
-            ;
             return await res.text();
         } catch (err) {
             console.error('Fetch error:', err);

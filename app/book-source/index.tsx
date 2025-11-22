@@ -4,6 +4,7 @@ import {useFocusEffect, useRouter} from 'expo-router';
 import {Plus, Trash2} from 'lucide-react-native';
 import {Pressable, ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View} from 'react-native';
 import {useCallback, useState} from "react";
+import demoSource from "@/app/book-source/demo-source";
 
 export default function BookSourceListScreen() {
     const router = useRouter();
